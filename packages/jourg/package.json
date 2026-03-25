@@ -1,0 +1,25 @@
+{
+  "name": "jourg",
+  "version": "0.1.0",
+  "description": "jourg CLI",
+  "type": "module",
+  "main": "./dist/index.js",
+  "bin": {
+    "jourg": "./dist/index.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "prepublishOnly": "pnpm build"
+  },
+  "devDependencies": {
+    "@types/node": "^25.5.0",
+    "typescript": "^5.8.2"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
