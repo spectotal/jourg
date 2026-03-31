@@ -17,6 +17,7 @@ The UJG spec defines a **five-layer conceptual stack**. This monorepo maps each 
 | **Experience** (Semantic) | Steps, Touchpoints, Phases, Pain Points | `@jourg/experience` |
 | **Runtime** (Execution) | Actual user paths as causal event chains | `@jourg/runtime` |
 | **Mapping** (Conformance) | Intent vs reality; conversion metrics, friction points | `@jourg/mapping` |
+| **Core Import Resolution** (Interop) | Consumer/producer import graph resolution for `UJGDocument` bundles | `@jourg/resolver` |
 
 Each package is independently publishable. The `jourg` CLI (`packages/jourg`) is the profile-aware entrypoint that composes them.
 
@@ -27,7 +28,8 @@ packages/
 ├── graph/        # Layer 2: Definition — automata-style journey graph
 ├── experience/   # Layer 3: Semantic — qualitative UX intent as data
 ├── runtime/      # Layer 4: Execution — session event chains
-└── mapping/      # Layer 5: Conformance — graph overlay & metrics
+├── mapping/      # Layer 5: Conformance — graph overlay & metrics
+└── resolver/     # Cross-layer: UJGDocument import resolution (consumer/producer)
 ```
 
 ---
@@ -73,4 +75,4 @@ npx jourg help
 
 ## Status
 
-Implementation of the [UJG W3C Community Group Draft](https://ujg.specs.openuji.org/ed/architecture) (last spec update: 2026-01-28). Currently implementing `graph-core` profile.
+Implementation of the [UJG W3C Community Group Draft](https://ujg.specs.openuji.org/ed/architecture) (last spec update: 2026-01-28). Currently implementing `graph-core` profile, with resolver planning aligned to Core import semantics and official ED extension compatibility.
