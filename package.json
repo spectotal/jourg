@@ -5,7 +5,9 @@
   "scripts": {
     "build": "pnpm -r build",
     "dev": "pnpm -r dev",
-    "lint": "pnpm -r lint"
+    "lint": "pnpm -r lint",
+    "playground": "pnpm --filter ujg-graph-playground dev",
+    "playground:build": "pnpm --filter ujg-graph-playground build"
   },
   "devDependencies": {
     "typescript": "^5.8.2"

@@ -22,6 +22,9 @@ The UJG spec defines a **five-layer conceptual stack**. This monorepo maps each 
 Each package is independently publishable. The `jourg` CLI (`packages/jourg`) is the profile-aware entrypoint that composes them.
 
 ```
+apps/
+└── graph-playground/ # React Flow playground for pasted UJG graph documents
+
 packages/
 ├── jourg/        # CLI — profile loader and command dispatcher
 ├── core/         # Layer 1: Transport — JSON-LD envelope & URI identity
@@ -75,4 +78,4 @@ npx jourg help
 
 ## Status
 
-Implementation of the [UJG W3C Community Group Draft](https://ujg.specs.openuji.org/ed/architecture) (last spec update: 2026-01-28). Currently implementing `graph-core` profile, with a resolver MVP for Core import semantics, file/HTTP import traversal, and official ED extension preservation.
+Implementation of the [UJG W3C Community Group Draft](https://ujg.specs.openuji.org/ed/architecture) (last spec update: 2026-01-28). Currently implementing `graph-core` profile, with resolver and graph MVP packages plus a React Flow playground for pasted UJG graph documents.
