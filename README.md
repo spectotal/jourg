@@ -75,4 +75,4 @@ npx jourg help
 
 ## Status
 
-Implementation of the [UJG W3C Community Group Draft](https://ujg.specs.openuji.org/ed/architecture) (last spec update: 2026-01-28). Currently implementing `graph-core` profile, with resolver planning aligned to Core import semantics and official ED extension compatibility.
+Implementation of the [UJG W3C Community Group Draft](https://ujg.specs.openuji.org/ed/architecture) (last spec update: 2026-01-28). Currently implementing `graph-core` profile, with a resolver MVP for Core import semantics, file/HTTP import traversal, and official ED extension preservation.

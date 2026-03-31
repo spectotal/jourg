@@ -15,6 +15,9 @@
     "dev": "tsc --watch",
     "prepublishOnly": "pnpm build"
   },
+  "dependencies": {
+    "@jourg/resolver": "workspace:*"
+  },
   "devDependencies": {
     "@types/node": "^25.5.0",
     "typescript": "^5.8.2"

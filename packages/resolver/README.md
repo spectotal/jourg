@@ -1,25 +1,66 @@
 # @jourg/resolver
 
-Planning package for a consumer/producer-side resolver around `UJGDocument` import semantics.
+`@jourg/resolver` is a working MVP for resolving `UJGDocument` imports on the consumer or producer side.
 
-## Why this package
+It implements the current UJG Core import rules from <https://ujg.specs.openuji.org/ed/core>:
 
-UJG Core defines import behavior but intentionally does not define workspace/package roots. This package codifies a resolver strategy for monorepo producer workflows and runtime consumer workflows while preserving Core conformance.
+- `imports` values are treated as IRI references
+- relative imports resolve against the importing document location
+- document-level `extensions` are invalid
+- node-level `extensions` are preserved and validated as JSON objects
+- unknown extensions never affect core identity, import resolution, or reference resolution
 
-## Inputs from UJG Core spec
+## What the MVP does
 
-From <https://ujg.specs.openuji.org/ed/core> (Editor's Draft):
+- resolves transitive imports from `file:` and `http(s):` sources
+- normalizes imports to deterministic absolute URLs
+- collects provenance and diagnostics for every resolved import edge
+- materializes a flattened bundle of resolved documents and identified entities
+- validates `specVersion` compatibility and duplicate `@id` collisions across documents
+- supports opt-in extension handlers while defaulting official extensions to preserve-only mode
 
-- `imports` values **must** be IRI references.
-- `imports` may be absolute IRIs or relative IRI references.
-- Relative imports must resolve against the location of the importing `UJGDocument`.
-- For HTTP(S), base is the document URL; for file URLs, base is importing file URL.
-- Core does not define manifest root/package root/workspace root.
-- Extension data is optional and must not change core import/reference semantics unless explicitly implemented by a consumer/producer extension module.
+## API
 
-## Supported extension strategy
+```ts
+import {
+  normalizeImports,
+  resolveDocument,
+  validateBundle
+} from "@jourg/resolver";
 
-From the **Supported Extensions** block on <https://ujg.specs.openuji.org/ed>, official optional extensions include:
+const bundle = await resolveDocument("journeys/checkout.jsonld", {
+  mode: "consumer"
+});
+
+const normalized = normalizeImports(bundle.documents[0].document, new URL(bundle.entry));
+const validation = validateBundle(bundle);
+```
+
+### `resolveDocument(entry, options)`
+
+Loads an entry document, resolves transitive imports, and returns:
+
+- `documents`: per-document source, normalized document, import edges, and document diagnostics
+- `imports`: all resolved import edges with status and loader provenance
+- `materialized`: cloned resolved documents plus flattened identified entities
+- `validation`: aggregate bundle validation result
+- `activeExtensionHandlers`: namespaces whose handlers ran successfully
+
+### `normalizeImports(document, base)`
+
+Returns a cloned document with deduplicated, sorted, absolute import URLs.
+
+### `validateBundle(bundle, options?)`
+
+Checks the resolved bundle for:
+
+- Core document-shape violations already collected during load
+- `specVersion` incompatibilities against the entry document
+- duplicate `@id` collisions across different source documents
+
+## Extension handling
+
+The ED index currently lists these official optional extensions:
 
 - Design System
 - Routing
@@ -32,70 +73,20 @@ From the **Supported Extensions** block on <https://ujg.specs.openuji.org/ed>, o
 - Forms
 - Personalization
 
-Resolver policy for these extensions in phase 1:
+The MVP keeps all of them in preserve-only mode by default. You can register explicit namespace handlers when you want extra validation or materialization for a known extension.
 
-1. **Preserve-by-default:** keep extension payloads round-trippable in producer and consumer paths.
-2. **Isolation from core:** extension keys cannot alter core import resolution, IRI identity, or base-URL behavior.
-3. **Opt-in handlers:** extension-specific validation/materialization occurs only via registered handlers.
-4. **Capability reporting:** resolver output exposes which official extension handlers were active.
+## CLI
 
-## Package scope
+The workspace CLI exposes the resolver directly:
 
-### Producer side
-
-Used during authoring/publishing to normalize and validate document sets before distribution:
-
-1. Normalize import declarations.
-2. Expand and validate import graph.
-3. Emit deterministic artifacts.
-
-### Consumer side
-
-Used during runtime/analysis ingestion to resolve and materialize UJG bundles:
-
-1. Resolve direct and transitive imports.
-2. Track provenance and resolution diagnostics.
-3. Validate assembled bundle against Core constraints.
-
-## Proposed API surface (phase 1)
-
-```ts
-resolveDocument(entry: URL, options): Promise<ResolvedBundle>
-normalizeImports(document: UJGDocument, base: URL): UJGDocument
-validateBundle(bundle: ResolvedBundle): ValidationResult
+```bash
+jourg resolve ./journeys/checkout.jsonld
+jourg resolve ./journeys/checkout.jsonld --format json
+jourg resolve https://example.com/ujg/entry.jsonld --mode producer
 ```
 
-## Delivery plan
+## Testing
 
-### Milestone 1 — Resolver kernel
-
-- URL/file relative-resolution engine (RFC3986-aligned behavior through URL APIs).
-- Pluggable loaders (`http`, `file`, custom).
-- Cycle detection + depth limits.
-
-### Milestone 2 — Producer pipeline
-
-- Canonicalization policy for publish artifacts.
-- Stable ordering and deterministic serialization.
-- Compatibility gates for `specVersion`.
-- Extension namespace and payload-shape checks (without semantic rewriting).
-
-### Milestone 3 — Consumer materialization
-
-- Merge semantics for imported nodes.
-- Provenance map for every resolved unit.
-- Diagnostics model (`warning`, `error`, `source`, `importPath`).
-- Optional execution of registered official extension handlers.
-
-### Milestone 4 — CLI integration
-
-- `jourg resolve <entry>` command.
-- `--mode consumer|producer` presets.
-- Machine-readable output for CI.
-
-## Non-goals (phase 1)
-
-- Remote context rewriting.
-- Full profile-specific semantic validation beyond Core.
-- Caching/distributed fetch coordination.
-- Implicit semantic behavior for extensions without an explicit handler.
+```bash
+pnpm --filter @jourg/resolver test
+```
