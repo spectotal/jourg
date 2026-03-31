@@ -8,12 +8,14 @@ import {
 } from "../dist/index.js";
 
 const mainDocument = {
-  type: "UJGDocument",
+  "@context": "https://ujg.specs.openuji.org/ed/ns/context.jsonld",
+  "@id": "https://example.com/ujg/graph/main-site.jsonld",
+  "@type": "UJGDocument",
   specVersion: "1.0",
-  items: [
+  nodes: [
     {
-      type: "Journey",
-      id: "urn:ujg:journey:main-site",
+      "@type": "Journey",
+      "@id": "urn:ujg:journey:main-site",
       startState: "urn:ujg:state:home",
       stateRefs: ["urn:ujg:state:home", "urn:ujg:state:checkout-flow"],
       transitionRefs: [
@@ -23,60 +25,62 @@ const mainDocument = {
       outgoingTransitionGroupRefs: ["urn:ujg:otg:global-header"]
     },
     {
-      type: "Transition",
-      id: "urn:ujg:transition:home-to-checkout",
+      "@type": "Transition",
+      "@id": "urn:ujg:transition:home-to-checkout",
       from: "urn:ujg:state:home",
-      to: { id: "urn:ujg:state:checkout-flow", type: "CompositeState" },
+      to: "urn:ujg:state:checkout-flow",
       label: "Buy Now"
     },
     {
-      type: "Transition",
-      id: "urn:ujg:transition:checkout-to-profile",
+      "@type": "Transition",
+      "@id": "urn:ujg:transition:checkout-to-profile",
       from: "urn:ujg:state:checkout-flow",
       to: "urn:ujg:state:profile",
       label: "Profile"
     },
     {
-      type: "State",
-      id: "urn:ujg:state:home",
+      "@type": "State",
+      "@id": "urn:ujg:state:home",
       label: "Home Page",
       tags: ["phase:landing"]
     },
     {
-      type: "CompositeState",
-      id: "urn:ujg:state:checkout-flow",
+      "@type": "CompositeState",
+      "@id": "urn:ujg:state:checkout-flow",
       label: "Checkout Process",
       subjourneyId: "urn:ujg:journey:checkout"
     },
     {
-      type: "State",
-      id: "urn:ujg:state:profile",
+      "@type": "State",
+      "@id": "urn:ujg:state:profile",
       label: "Profile"
     },
     {
-      type: "OutgoingTransition",
-      id: "urn:ujg:ot:go-home",
+      "@type": "OutgoingTransition",
+      "@id": "urn:ujg:ot:go-home",
       to: "urn:ujg:state:home",
       label: "Home"
     },
     {
-      type: "OutgoingTransition",
-      id: "urn:ujg:ot:go-profile",
+      "@type": "OutgoingTransition",
+      "@id": "urn:ujg:ot:go-profile",
       to: "urn:ujg:state:profile",
       label: "Profile"
     },
     {
-      type: "OutgoingTransitionGroup",
-      id: "urn:ujg:otg:global-header",
+      "@type": "OutgoingTransitionGroup",
+      "@id": "urn:ujg:otg:global-header",
       outgoingTransitionRefs: ["urn:ujg:ot:go-home", "urn:ujg:ot:go-profile"]
     }
   ]
 };
 
 const checkoutDocument = {
+  "@context": "https://ujg.specs.openuji.org/ed/ns/context.jsonld",
+  "@id": "https://example.com/ujg/graph/checkout.jsonld",
   "@type": "UJGDocument",
   specVersion: "1.0",
-  items: [
+  nodes: [
     {
       "@type": "Journey",
       "@id": "urn:ujg:journey:checkout",
@@ -104,10 +108,10 @@ const checkoutDocument = {
   ]
 };
 
-test("validateGraph accepts the Graph ED example split across multiple documents", () => {
+test("validateGraph accepts Graph ED documents that use UJGDocument.nodes", () => {
   const index = createGraphIndex([
-    { source: "main.json", document: mainDocument },
-    { source: "checkout.json", document: checkoutDocument }
+    { source: "main-site.jsonld", document: mainDocument },
+    { source: "checkout.jsonld", document: checkoutDocument }
   ]);
   const validation = validateGraph(index);
 
@@ -117,18 +121,17 @@ test("validateGraph accepts the Graph ED example split across multiple documents
   assert.equal(index.outgoingTransitionGroups.size, 1);
 });
 
-test("materializeJourney injects outgoing groups, deduplicates explicit edges, and includes referenced states", () => {
+test("materializeJourney injects outgoing groups and includes referenced states", () => {
   const graph = materializeJourney(
     [
-      { source: "main.json", document: mainDocument },
-      { source: "checkout.json", document: checkoutDocument }
+      { source: "main-site.jsonld", document: mainDocument },
+      { source: "checkout.jsonld", document: checkoutDocument }
     ],
     "urn:ujg:journey:main-site"
   );
 
   assert.equal(graph.journey?.id, "urn:ujg:journey:main-site");
   assert.equal(graph.nodes.length, 3);
-  assert.ok(graph.nodes.some((node) => node.id === "urn:ujg:state:profile"));
   assert.equal(
     graph.nodes.find((node) => node.id === "urn:ujg:state:profile")?.membership,
     "referenced"
@@ -144,29 +147,29 @@ test("materializeJourney injects outgoing groups, deduplicates explicit edges, a
   );
 });
 
-test("validateGraph reports missing references and wrong graph types", () => {
+test("validateGraph reports missing references and wrong target types", () => {
   const validation = validateGraph([
     {
-      source: "broken.json",
+      source: "broken.jsonld",
       document: {
-        type: "UJGDocument",
-        items: [
+        "@type": "UJGDocument",
+        nodes: [
           {
-            type: "Journey",
-            id: "urn:ujg:journey:broken",
+            "@type": "Journey",
+            "@id": "urn:ujg:journey:broken",
             startState: "urn:ujg:state:missing",
             stateRefs: ["urn:ujg:state:home"],
             transitionRefs: ["urn:ujg:transition:not-a-transition"],
             outgoingTransitionGroupRefs: ["urn:ujg:state:home"]
           },
           {
-            type: "State",
-            id: "urn:ujg:state:home",
+            "@type": "State",
+            "@id": "urn:ujg:state:home",
             label: "Home"
           },
           {
-            type: "Transition",
-            id: "urn:ujg:transition:not-a-transition",
+            "@type": "Transition",
+            "@id": "urn:ujg:transition:not-a-transition",
             from: "urn:ujg:state:home",
             to: "urn:ujg:state:home"
           }

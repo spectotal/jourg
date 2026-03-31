@@ -6,12 +6,12 @@ export interface JsonObject {
 }
 
 export interface GraphDocument extends JsonObject {
-  id?: string;
+  "@context"?: JsonValue;
   "@id"?: string;
-  type?: string;
   "@type"?: string;
   specVersion?: string;
-  items?: JsonValue[];
+  imports?: string[];
+  nodes?: JsonValue[];
 }
 
 export interface GraphDocumentInput {
@@ -19,7 +19,7 @@ export interface GraphDocumentInput {
   source?: string;
 }
 
-export type GraphItemType =
+export type GraphNodeType =
   | "Journey"
   | "State"
   | "CompositeState"
@@ -29,7 +29,7 @@ export type GraphItemType =
 
 export interface GraphEntityBase {
   id: string;
-  type: GraphItemType;
+  type: GraphNodeType;
   source: string;
   raw: JsonObject;
 }
@@ -85,24 +85,24 @@ export type GraphEntity =
 export interface IndexedGraphDocument {
   source: string;
   document: GraphDocument;
-  itemIds: string[];
+  nodeIds: string[];
 }
 
 export interface GraphDiagnostic {
   severity: "warning" | "error";
   code:
-    | "DUPLICATE_ITEM_ID"
+    | "DUPLICATE_NODE_ID"
     | "GRAPH_REFERENCE_MISSING"
     | "GRAPH_REFERENCE_TYPE"
     | "INVALID_GRAPH_DOCUMENT"
-    | "INVALID_GRAPH_ITEM"
+    | "INVALID_GRAPH_NODE"
     | "JOURNEY_NOT_FOUND";
   message: string;
   source?: string;
-  itemId?: string;
+  nodeId?: string;
   path?: string;
   refId?: string;
-  expectedType?: GraphItemType | "StateLike";
+  expectedType?: GraphNodeType | "StateLike";
 }
 
 export interface GraphValidationResult {
@@ -112,7 +112,7 @@ export interface GraphValidationResult {
 
 export interface GraphIndex {
   documents: IndexedGraphDocument[];
-  items: Map<string, GraphEntity>;
+  nodes: Map<string, GraphEntity>;
   journeys: Map<string, JourneyEntity>;
   states: Map<string, StateEntity>;
   compositeStates: Map<string, CompositeStateEntity>;

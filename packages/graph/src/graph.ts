@@ -6,7 +6,7 @@ import type {
   GraphDocumentInput,
   GraphEntity,
   GraphIndex,
-  GraphItemType,
+  GraphNodeType,
   GraphValidationResult,
   IndexedGraphDocument,
   JourneyEntity,
@@ -14,7 +14,6 @@ import type {
   JsonValue,
   MaterializedJourneyEdge,
   MaterializedJourneyGraph,
-  MaterializedJourneyNode,
   OutgoingTransitionEntity,
   OutgoingTransitionGroupEntity,
   StateEntity,
@@ -22,7 +21,7 @@ import type {
   TransitionEntity
 } from "./types.js";
 
-const GRAPH_ITEM_TYPES = new Set<GraphItemType>([
+const GRAPH_NODE_TYPES = new Set<GraphNodeType>([
   "Journey",
   "State",
   "CompositeState",
@@ -34,7 +33,7 @@ const GRAPH_ITEM_TYPES = new Set<GraphItemType>([
 export function createGraphIndex(inputs: readonly GraphDocumentInput[]): GraphIndex {
   const diagnostics: GraphDiagnostic[] = [];
   const documents: IndexedGraphDocument[] = [];
-  const items = new Map<string, GraphEntity>();
+  const nodes = new Map<string, GraphEntity>();
   const journeys = new Map<string, JourneyEntity>();
   const states = new Map<string, StateEntity>();
   const compositeStates = new Map<string, CompositeStateEntity>();
@@ -43,69 +42,81 @@ export function createGraphIndex(inputs: readonly GraphDocumentInput[]): GraphIn
   const outgoingTransitions = new Map<string, OutgoingTransitionEntity>();
 
   for (const [documentIndex, input] of inputs.entries()) {
-    const source = input.source ?? `document-${documentIndex + 1}`;
     const document = input.document as GraphDocument;
+    const source =
+      input.source ??
+      (typeof document["@id"] === "string" ? document["@id"] : `document-${documentIndex + 1}`);
     const indexedDocument: IndexedGraphDocument = {
       source,
       document,
-      itemIds: []
+      nodeIds: []
     };
 
     documents.push(indexedDocument);
 
-    if ("items" in document && !Array.isArray(document.items)) {
+    if ("@type" in document && document["@type"] !== "UJGDocument") {
       diagnostics.push({
         severity: "error",
         code: "INVALID_GRAPH_DOCUMENT",
-        message: "Graph documents must expose items as an array when present.",
+        message: 'Graph documents must use "@type": "UJGDocument".',
         source,
-        path: "$.items"
+        path: "$.@type"
+      });
+    }
+
+    if ("nodes" in document && !Array.isArray(document.nodes)) {
+      diagnostics.push({
+        severity: "error",
+        code: "INVALID_GRAPH_DOCUMENT",
+        message: "Graph documents must expose nodes as an array when present.",
+        source,
+        path: "$.nodes"
       });
       continue;
     }
 
-    const itemValues = Array.isArray(document.items) ? document.items : [];
+    const nodeValues = Array.isArray(document.nodes) ? document.nodes : [];
 
-    for (const [itemIndex, itemValue] of itemValues.entries()) {
-      const path = `$.items[${itemIndex}]`;
+    for (const [nodeIndex, nodeValue] of nodeValues.entries()) {
+      const path = `$.nodes[${nodeIndex}]`;
 
-      if (!isJsonObject(itemValue)) {
+      if (!isJsonObject(nodeValue)) {
         diagnostics.push({
           severity: "error",
-          code: "INVALID_GRAPH_ITEM",
-          message: "Graph items must be JSON objects.",
+          code: "INVALID_GRAPH_NODE",
+          message: "Graph nodes must be JSON objects.",
           source,
           path
         });
         continue;
       }
 
-      const type = getEntityType(itemValue);
+      const type = getNodeType(nodeValue);
 
-      if (!type || !GRAPH_ITEM_TYPES.has(type)) {
+      if (!type || !GRAPH_NODE_TYPES.has(type)) {
         continue;
       }
 
-      const entity = normalizeGraphEntity(type, itemValue, source, path, diagnostics);
+      const entity = normalizeGraphNode(type, nodeValue, source, path, diagnostics);
 
       if (!entity) {
         continue;
       }
 
-      if (items.has(entity.id)) {
+      if (nodes.has(entity.id)) {
         diagnostics.push({
           severity: "error",
-          code: "DUPLICATE_ITEM_ID",
-          message: `Duplicate graph item id ${entity.id} was found.`,
+          code: "DUPLICATE_NODE_ID",
+          message: `Duplicate graph node id ${entity.id} was found.`,
           source,
-          itemId: entity.id,
+          nodeId: entity.id,
           path
         });
         continue;
       }
 
-      items.set(entity.id, entity);
-      indexedDocument.itemIds.push(entity.id);
+      nodes.set(entity.id, entity);
+      indexedDocument.nodeIds.push(entity.id);
 
       switch (entity.type) {
         case "Journey":
@@ -132,7 +143,7 @@ export function createGraphIndex(inputs: readonly GraphDocumentInput[]): GraphIn
 
   return {
     documents,
-    items,
+    nodes,
     journeys,
     states,
     compositeStates,
@@ -241,7 +252,7 @@ export function materializeJourney(
           severity: "error",
           code: "JOURNEY_NOT_FOUND",
           message: `Journey ${journeyId} was not found in the provided documents.`,
-          itemId: journeyId
+          nodeId: journeyId
         }
       ]
     };
@@ -298,12 +309,12 @@ export function materializeJourney(
       continue;
     }
 
-    const outgoingTransitions = group.outgoingTransitionRefs
+    const groupTransitions = group.outgoingTransitionRefs
       .map((refId) => index.outgoingTransitions.get(refId))
       .filter((value): value is OutgoingTransitionEntity => Boolean(value));
 
     for (const stateId of memberStateIds) {
-      for (const outgoingTransition of outgoingTransitions) {
+      for (const outgoingTransition of groupTransitions) {
         const target = getStateLike(index, outgoingTransition.to);
 
         if (!target) {
@@ -351,20 +362,20 @@ export function materializeJourney(
   };
 }
 
-function normalizeGraphEntity(
-  type: GraphItemType,
-  item: JsonObject,
+function normalizeGraphNode(
+  type: GraphNodeType,
+  node: JsonObject,
   source: string,
   path: string,
   diagnostics: GraphDiagnostic[]
 ): GraphEntity | undefined {
-  const id = getEntityId(item);
+  const id = getNodeId(node);
 
   if (!id) {
     diagnostics.push({
       severity: "error",
-      code: "INVALID_GRAPH_ITEM",
-      message: `${type} items must include an id.`,
+      code: "INVALID_GRAPH_NODE",
+      message: `${type} nodes must include "@id".`,
       source,
       path
     });
@@ -373,19 +384,19 @@ function normalizeGraphEntity(
 
   switch (type) {
     case "Journey": {
-      const startState = getRefId(item.startState);
-      const stateRefs = getRefList(item.stateRefs);
-      const transitionRefs = getRefList(item.transitionRefs);
-      const outgoingTransitionGroupRefs = getRefList(item.outgoingTransitionGroupRefs);
+      const startState = getRequiredString(node.startState);
+      const stateRefs = getRequiredStringArray(node.stateRefs, 1);
+      const transitionRefs = getRequiredStringArray(node.transitionRefs, 1);
+      const outgoingTransitionGroupRefs = getOptionalStringArray(node.outgoingTransitionGroupRefs);
 
-      if (!startState || !Array.isArray(item.stateRefs) || !Array.isArray(item.transitionRefs)) {
+      if (!startState || !stateRefs || !transitionRefs || !outgoingTransitionGroupRefs) {
         diagnostics.push({
           severity: "error",
-          code: "INVALID_GRAPH_ITEM",
+          code: "INVALID_GRAPH_NODE",
           message:
-            "Journey items must include startState, stateRefs, and transitionRefs with valid reference values.",
+            'Journey nodes must include string "startState", "stateRefs", and "transitionRefs".',
           source,
-          itemId: id,
+          nodeId: id,
           path
         });
         return undefined;
@@ -395,7 +406,7 @@ function normalizeGraphEntity(
         id,
         type,
         source,
-        raw: item,
+        raw: node,
         startState,
         stateRefs,
         transitionRefs,
@@ -403,15 +414,16 @@ function normalizeGraphEntity(
       };
     }
     case "State": {
-      const label = getString(item.label);
+      const label = getRequiredString(node.label);
+      const tags = getOptionalStringArray(node.tags);
 
-      if (!label) {
+      if (!label || !tags) {
         diagnostics.push({
           severity: "error",
-          code: "INVALID_GRAPH_ITEM",
-          message: "State items must include a label.",
+          code: "INVALID_GRAPH_NODE",
+          message: 'State nodes must include string "label", and "tags" must be string arrays when present.',
           source,
-          itemId: id,
+          nodeId: id,
           path
         });
         return undefined;
@@ -421,22 +433,24 @@ function normalizeGraphEntity(
         id,
         type,
         source,
-        raw: item,
+        raw: node,
         label,
-        tags: getStringList(item.tags)
+        tags
       };
     }
     case "CompositeState": {
-      const label = getString(item.label);
-      const subjourneyId = getRefId(item.subjourneyId);
+      const label = getRequiredString(node.label);
+      const subjourneyId = getRequiredString(node.subjourneyId);
+      const tags = getOptionalStringArray(node.tags);
 
-      if (!label || !subjourneyId) {
+      if (!label || !subjourneyId || !tags) {
         diagnostics.push({
           severity: "error",
-          code: "INVALID_GRAPH_ITEM",
-          message: "CompositeState items must include label and subjourneyId.",
+          code: "INVALID_GRAPH_NODE",
+          message:
+            'CompositeState nodes must include string "label", string "subjourneyId", and string-array "tags" when present.',
           source,
-          itemId: id,
+          nodeId: id,
           path
         });
         return undefined;
@@ -446,23 +460,24 @@ function normalizeGraphEntity(
         id,
         type,
         source,
-        raw: item,
+        raw: node,
         label,
-        tags: getStringList(item.tags),
+        tags,
         subjourneyId
       };
     }
     case "Transition": {
-      const from = getRefId(item.from);
-      const to = getRefId(item.to);
+      const from = getRequiredString(node.from);
+      const to = getRequiredString(node.to);
+      const label = getOptionalString(node.label);
 
       if (!from || !to) {
         diagnostics.push({
           severity: "error",
-          code: "INVALID_GRAPH_ITEM",
-          message: "Transition items must include valid from and to references.",
+          code: "INVALID_GRAPH_NODE",
+          message: 'Transition nodes must include string "from" and string "to".',
           source,
-          itemId: id,
+          nodeId: id,
           path
         });
         return undefined;
@@ -472,20 +487,23 @@ function normalizeGraphEntity(
         id,
         type,
         source,
-        raw: item,
+        raw: node,
         from,
         to,
-        label: getString(item.label)
+        label
       };
     }
     case "OutgoingTransitionGroup": {
-      if (!Array.isArray(item.outgoingTransitionRefs)) {
+      const outgoingTransitionRefs = getRequiredStringArray(node.outgoingTransitionRefs, 1);
+
+      if (!outgoingTransitionRefs) {
         diagnostics.push({
           severity: "error",
-          code: "INVALID_GRAPH_ITEM",
-          message: "OutgoingTransitionGroup items must include outgoingTransitionRefs.",
+          code: "INVALID_GRAPH_NODE",
+          message:
+            'OutgoingTransitionGroup nodes must include "outgoingTransitionRefs" as a non-empty string array.',
           source,
-          itemId: id,
+          nodeId: id,
           path
         });
         return undefined;
@@ -495,20 +513,21 @@ function normalizeGraphEntity(
         id,
         type,
         source,
-        raw: item,
-        outgoingTransitionRefs: getRefList(item.outgoingTransitionRefs)
+        raw: node,
+        outgoingTransitionRefs
       };
     }
     case "OutgoingTransition": {
-      const to = getRefId(item.to);
+      const to = getRequiredString(node.to);
+      const label = getOptionalString(node.label);
 
       if (!to) {
         diagnostics.push({
           severity: "error",
-          code: "INVALID_GRAPH_ITEM",
-          message: "OutgoingTransition items must include a valid to reference.",
+          code: "INVALID_GRAPH_NODE",
+          message: 'OutgoingTransition nodes must include string "to".',
           source,
-          itemId: id,
+          nodeId: id,
           path
         });
         return undefined;
@@ -518,9 +537,9 @@ function normalizeGraphEntity(
         id,
         type,
         source,
-        raw: item,
+        raw: node,
         to,
-        label: getString(item.label)
+        label
       };
     }
   }
@@ -530,7 +549,7 @@ function expectStateLike(
   index: GraphIndex,
   diagnostics: GraphDiagnostic[],
   source: string,
-  itemId: string,
+  nodeId: string,
   path: string,
   refId: string
 ) {
@@ -540,7 +559,7 @@ function expectStateLike(
     return;
   }
 
-  const target = index.items.get(refId);
+  const target = index.nodes.get(refId);
 
   if (!target) {
     diagnostics.push({
@@ -548,7 +567,7 @@ function expectStateLike(
       code: "GRAPH_REFERENCE_MISSING",
       message: `Reference ${refId} could not be resolved.`,
       source,
-      itemId,
+      nodeId,
       path,
       refId,
       expectedType: "StateLike"
@@ -561,7 +580,7 @@ function expectStateLike(
     code: "GRAPH_REFERENCE_TYPE",
     message: `Reference ${refId} resolved to ${target.type}, expected State or CompositeState.`,
     source,
-    itemId,
+    nodeId,
     path,
     refId,
     expectedType: "StateLike"
@@ -572,12 +591,12 @@ function expectType(
   index: GraphIndex,
   diagnostics: GraphDiagnostic[],
   source: string,
-  itemId: string,
+  nodeId: string,
   path: string,
   refId: string,
-  expectedType: GraphItemType
+  expectedType: GraphNodeType
 ) {
-  const target = index.items.get(refId);
+  const target = index.nodes.get(refId);
 
   if (!target) {
     diagnostics.push({
@@ -585,7 +604,7 @@ function expectType(
       code: "GRAPH_REFERENCE_MISSING",
       message: `Reference ${refId} could not be resolved.`,
       source,
-      itemId,
+      nodeId,
       path,
       refId,
       expectedType
@@ -599,7 +618,7 @@ function expectType(
       code: "GRAPH_REFERENCE_TYPE",
       message: `Reference ${refId} resolved to ${target.type}, expected ${expectedType}.`,
       source,
-      itemId,
+      nodeId,
       path,
       refId,
       expectedType
@@ -638,53 +657,54 @@ function mergeEdge(
   existing.label ??= label;
 }
 
-function getEntityType(value: JsonObject): GraphItemType | undefined {
-  const type = getString(value.type) ?? getString(value["@type"]);
-  return type && GRAPH_ITEM_TYPES.has(type as GraphItemType)
-    ? (type as GraphItemType)
+function getNodeType(value: JsonObject): GraphNodeType | undefined {
+  const type = getOptionalString(value["@type"]);
+  return type && GRAPH_NODE_TYPES.has(type as GraphNodeType)
+    ? (type as GraphNodeType)
     : undefined;
 }
 
-function getEntityId(value: JsonObject): string | undefined {
-  return getString(value.id) ?? getString(value["@id"]);
+function getNodeId(value: JsonObject): string | undefined {
+  return getRequiredString(value["@id"]);
 }
 
-function getRefId(value: JsonValue | undefined): string | undefined {
-  if (typeof value === "string" && value.length > 0) {
-    return value;
-  }
-
-  if (isJsonObject(value)) {
-    return getEntityId(value);
-  }
-
-  return undefined;
-}
-
-function getRefList(value: JsonValue | undefined): string[] {
-  if (!Array.isArray(value)) {
-    return [];
-  }
-
-  return value
-    .map((item) => getRefId(item))
-    .filter((item): item is string => Boolean(item));
-}
-
-function getString(value: JsonValue | undefined): string | undefined {
+function getRequiredString(value: JsonValue | undefined): string | undefined {
   return typeof value === "string" && value.length > 0 ? value : undefined;
 }
 
-function getStringList(value: JsonValue | undefined): string[] {
+function getOptionalString(value: JsonValue | undefined): string | undefined {
+  return typeof value === "string" ? value : undefined;
+}
+
+function getRequiredStringArray(
+  value: JsonValue | undefined,
+  minimumLength: number
+): string[] | undefined {
   if (!Array.isArray(value)) {
+    return undefined;
+  }
+
+  if (value.length < minimumLength || value.some((item) => typeof item !== "string")) {
+    return undefined;
+  }
+
+  return value as string[];
+}
+
+function getOptionalStringArray(value: JsonValue | undefined): string[] | undefined {
+  if (value === undefined) {
     return [];
   }
 
-  return value.filter((item): item is string => typeof item === "string");
+  if (!Array.isArray(value) || value.some((item) => typeof item !== "string")) {
+    return undefined;
+  }
+
+  return value as string[];
 }
 
 function isGraphIndex(value: GraphIndex | readonly GraphDocumentInput[]): value is GraphIndex {
-  return typeof value === "object" && value !== null && "items" in value;
+  return typeof value === "object" && value !== null && "nodes" in value;
 }
 
 function isJsonObject(value: JsonValue | undefined): value is JsonObject {

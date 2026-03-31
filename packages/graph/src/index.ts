@@ -11,7 +11,7 @@ export type {
   GraphDocumentInput,
   GraphEntity,
   GraphIndex,
-  GraphItemType,
+  GraphNodeType,
   GraphValidationResult,
   IndexedGraphDocument,
   JourneyEntity,

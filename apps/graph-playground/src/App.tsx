@@ -15,13 +15,7 @@ import {
   ReactFlow,
   ReactFlowProvider
 } from "@xyflow/react";
-import {
-  startTransition,
-  useDeferredValue,
-  useEffect,
-  useMemo,
-  useState
-} from "react";
+import { useDeferredValue, useEffect, useMemo, useState } from "react";
 
 import {
   createFlowGraph,
@@ -29,42 +23,134 @@ import {
   type JourneyFlowNode
 } from "./flow";
 import { JourneyCanvasNode } from "./JourneyCanvasNode";
-import { createSampleDrafts, type SampleDraft } from "./sampleDocs";
 
-interface DocumentDraft {
-  id: string;
-  name: string;
-  text: string;
-}
+const SAMPLE_INPUT = JSON.stringify(
+  [
+    {
+      "@context": "https://ujg.specs.openuji.org/ed/ns/context.jsonld",
+      "@id": "https://example.com/ujg/graph/main-site.jsonld",
+      "@type": "UJGDocument",
+      specVersion: "1.0",
+      nodes: [
+        {
+          "@type": "Journey",
+          "@id": "urn:ujg:journey:main-site",
+          startState: "urn:ujg:state:home",
+          stateRefs: ["urn:ujg:state:home", "urn:ujg:state:checkout-flow"],
+          transitionRefs: [
+            "urn:ujg:transition:home-to-checkout",
+            "urn:ujg:transition:checkout-to-profile"
+          ],
+          outgoingTransitionGroupRefs: ["urn:ujg:otg:global-header"]
+        },
+        {
+          "@type": "Transition",
+          "@id": "urn:ujg:transition:home-to-checkout",
+          from: "urn:ujg:state:home",
+          to: "urn:ujg:state:checkout-flow",
+          label: "Buy Now"
+        },
+        {
+          "@type": "Transition",
+          "@id": "urn:ujg:transition:checkout-to-profile",
+          from: "urn:ujg:state:checkout-flow",
+          to: "urn:ujg:state:profile",
+          label: "Profile"
+        },
+        {
+          "@type": "State",
+          "@id": "urn:ujg:state:home",
+          label: "Home Page",
+          tags: ["phase:landing"]
+        },
+        {
+          "@type": "CompositeState",
+          "@id": "urn:ujg:state:checkout-flow",
+          label: "Checkout Process",
+          subjourneyId: "urn:ujg:journey:checkout"
+        },
+        {
+          "@type": "State",
+          "@id": "urn:ujg:state:profile",
+          label: "Profile"
+        },
+        {
+          "@type": "OutgoingTransition",
+          "@id": "urn:ujg:ot:go-home",
+          to: "urn:ujg:state:home",
+          label: "Home"
+        },
+        {
+          "@type": "OutgoingTransition",
+          "@id": "urn:ujg:ot:go-profile",
+          to: "urn:ujg:state:profile",
+          label: "Profile"
+        },
+        {
+          "@type": "OutgoingTransitionGroup",
+          "@id": "urn:ujg:otg:global-header",
+          outgoingTransitionRefs: ["urn:ujg:ot:go-home", "urn:ujg:ot:go-profile"]
+        }
+      ]
+    },
+    {
+      "@context": "https://ujg.specs.openuji.org/ed/ns/context.jsonld",
+      "@id": "https://example.com/ujg/graph/checkout.jsonld",
+      "@type": "UJGDocument",
+      specVersion: "1.0",
+      nodes: [
+        {
+          "@type": "Journey",
+          "@id": "urn:ujg:journey:checkout",
+          startState: "urn:ujg:state:shipping",
+          stateRefs: ["urn:ujg:state:shipping", "urn:ujg:state:payment"],
+          transitionRefs: ["urn:ujg:transition:shipping-to-payment"]
+        },
+        {
+          "@type": "State",
+          "@id": "urn:ujg:state:shipping",
+          label: "Shipping"
+        },
+        {
+          "@type": "State",
+          "@id": "urn:ujg:state:payment",
+          label: "Payment"
+        },
+        {
+          "@type": "Transition",
+          "@id": "urn:ujg:transition:shipping-to-payment",
+          from: "urn:ujg:state:shipping",
+          to: "urn:ujg:state:payment",
+          label: "Continue"
+        }
+      ]
+    }
+  ],
+  null,
+  2
+);
 
-interface DraftAnalysis {
+interface Analysis {
   documents: GraphDocumentInput[];
-  parseErrors: Map<string, string>;
+  parseError?: string;
   validation: GraphValidationResult;
   index: ReturnType<typeof createGraphIndex>;
-  journeys: ReturnType<typeof createGraphIndex>["journeys"];
 }
-
-const STORAGE_KEY = "jourg:graph-playground:v1";
 
 const nodeTypes = {
   journeyNode: JourneyCanvasNode
 };
 
 function FlowWorkbench() {
-  const [drafts, setDrafts] = useState(loadDrafts);
+  const [sourceText, setSourceText] = useState(SAMPLE_INPUT);
   const [selectedJourneyId, setSelectedJourneyId] = useState("");
-  const deferredDrafts = useDeferredValue(drafts);
+  const deferredSourceText = useDeferredValue(sourceText);
 
-  const analysis = useMemo(() => analyzeDrafts(deferredDrafts), [deferredDrafts]);
+  const analysis = useMemo(() => analyzeSource(deferredSourceText), [deferredSourceText]);
   const journeys = useMemo(
-    () => Array.from(analysis.journeys.values()).sort((left, right) => left.id.localeCompare(right.id)),
-    [analysis.journeys]
+    () => Array.from(analysis.index.journeys.values()).sort((left, right) => left.id.localeCompare(right.id)),
+    [analysis.index]
   );
-
-  useEffect(() => {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(drafts));
-  }, [drafts]);
 
   useEffect(() => {
     if (journeys.some((journey) => journey.id === selectedJourneyId)) {
@@ -91,106 +177,89 @@ function FlowWorkbench() {
   );
 
   const errorCount =
-    Array.from(analysis.parseErrors.values()).length +
+    (analysis.parseError ? 1 : 0) +
     analysis.validation.diagnostics.filter((diagnostic) => diagnostic.severity === "error").length;
   const warningCount = analysis.validation.diagnostics.filter(
     (diagnostic) => diagnostic.severity === "warning"
   ).length;
 
-  const serializedGraph = useMemo(
-    () => (materialized ? JSON.stringify(materialized, null, 2) : "Select a journey to inspect the effective graph."),
-    [materialized]
-  );
-
-  function updateDraft(id: string, patch: Partial<DocumentDraft>) {
-    startTransition(() => {
-      setDrafts((current) =>
-        current.map((draft) => (draft.id === id ? { ...draft, ...patch } : draft))
-      );
-    });
-  }
-
-  function addDraft() {
-    startTransition(() => {
-      setDrafts((current) => [
-        ...current,
-        {
-          id: crypto.randomUUID(),
-          name: `document-${current.length + 1}.json`,
-          text: "{\n  \"type\": \"UJGDocument\",\n  \"specVersion\": \"1.0\",\n  \"items\": []\n}"
-        }
-      ]);
-    });
-  }
-
-  function removeDraft(id: string) {
-    startTransition(() => {
-      setDrafts((current) => (current.length > 1 ? current.filter((draft) => draft.id !== id) : current));
-    });
-  }
-
-  function resetSamples() {
-    startTransition(() => {
-      setDrafts(createSampleDrafts());
-    });
-  }
-
   return (
-    <div className="playground-shell">
-      <aside className="panel panel--left">
-        <p className="eyebrow">Graph ED implementation</p>
+    <div className="app-shell">
+      <section className="composer">
+        <p className="eyebrow">Core + Graph schema</p>
         <h1>UJG Graph Playground</h1>
         <p className="lede">
-          Paste one or more UJG JSON documents, select a journey, and inspect the
-          effective graph that results after Graph-spec validation and outgoing-transition-group injection.
+          Paste one `UJGDocument` or an array of `UJGDocument`s. The playground reads Graph ED
+          nodes from `nodes`, validates references, and renders the selected journey in React Flow.
         </p>
 
         <div className="button-row">
-          <button type="button" onClick={addDraft}>
-            Add document
-          </button>
-          <button type="button" onClick={resetSamples}>
+          <button type="button" onClick={() => setSourceText(SAMPLE_INPUT)}>
             Load sample
           </button>
+          <button type="button" onClick={() => setSourceText("")}>
+            Clear
+          </button>
         </div>
 
-        <div className="editor-stack">
-          {drafts.map((draft) => (
-            <section className="editor-card" key={draft.id}>
-              <div className="editor-card__header">
-                <input
-                  aria-label="Document name"
-                  value={draft.name}
-                  onChange={(event) => updateDraft(draft.id, { name: event.target.value })}
-                />
-                <button
-                  className="button-ghost"
-                  type="button"
-                  onClick={() => removeDraft(draft.id)}
-                  disabled={drafts.length === 1}
-                >
-                  Remove
-                </button>
-              </div>
-              <textarea
-                aria-label={`Document ${draft.name}`}
-                value={draft.text}
-                onChange={(event) => updateDraft(draft.id, { text: event.target.value })}
-              />
-              {analysis.parseErrors.get(draft.id) ? (
-                <p className="inline-error">{analysis.parseErrors.get(draft.id)}</p>
-              ) : (
-                <p className="inline-ok">Parsed successfully.</p>
-              )}
-            </section>
-          ))}
-        </div>
-      </aside>
+        <textarea
+          aria-label="UJG document input"
+          className="source-input"
+          spellCheck={false}
+          value={sourceText}
+          onChange={(event) => setSourceText(event.target.value)}
+        />
 
-      <main className="canvas-column">
-        <section className="canvas-toolbar">
-          <div>
-            <p className="toolbar-label">Journey</p>
+        <div className="summary-grid">
+          <div className="summary-chip">
+            <strong>{analysis.documents.length}</strong>
+            <span>documents</span>
+          </div>
+          <div className="summary-chip">
+            <strong>{journeys.length}</strong>
+            <span>journeys</span>
+          </div>
+          <div className="summary-chip error">
+            <strong>{errorCount}</strong>
+            <span>errors</span>
+          </div>
+          <div className="summary-chip warning">
+            <strong>{warningCount}</strong>
+            <span>warnings</span>
+          </div>
+        </div>
+
+        <section className="diagnostics-card">
+          <h2>Diagnostics</h2>
+          <ul className="diagnostic-list">
+            {analysis.parseError ? (
+              <li>
+                <strong>PARSE</strong>
+                <span>{analysis.parseError}</span>
+              </li>
+            ) : null}
+            {analysis.validation.diagnostics.map((diagnostic) => (
+              <li key={JSON.stringify(diagnostic)}>
+                <strong>
+                  {diagnostic.severity.toUpperCase()} {diagnostic.code}
+                </strong>
+                <span>{diagnostic.message}</span>
+              </li>
+            ))}
+            {!analysis.parseError && analysis.validation.diagnostics.length === 0 ? (
+              <li>
+                <strong>OK</strong>
+                <span>The current payload satisfies the implemented Core and Graph shape assumptions.</span>
+              </li>
+            ) : null}
+          </ul>
+        </section>
+      </section>
+
+      <section className="viewer">
+        <div className="viewer-toolbar">
+          <label className="journey-picker">
+            <span>Journey</span>
             <select
               value={selectedJourneyId}
               onChange={(event) => setSelectedJourneyId(event.target.value)}
@@ -202,36 +271,16 @@ function FlowWorkbench() {
                 </option>
               ))}
             </select>
-          </div>
+          </label>
+        </div>
 
-          <div className="stat-rack">
-            <div className="stat-pill">
-              <strong>{analysis.documents.length}</strong>
-              <span>documents</span>
-            </div>
-            <div className="stat-pill">
-              <strong>{journeys.length}</strong>
-              <span>journeys</span>
-            </div>
-            <div className="stat-pill">
-              <strong>{materialized?.nodes.length ?? 0}</strong>
-              <span>nodes</span>
-            </div>
-            <div className="stat-pill">
-              <strong>{materialized?.edges.length ?? 0}</strong>
-              <span>edges</span>
-            </div>
-          </div>
-        </section>
-
-        <section className="canvas-frame">
+        <div className="canvas-frame">
           <ReactFlow<JourneyFlowNode, JourneyFlowEdge>
             key={selectedJourneyId || "empty"}
             fitView
             fitViewOptions={{ padding: 0.18 }}
             edges={flow.edges}
-            elementsSelectable
-            minZoom={0.3}
+            minZoom={0.35}
             nodes={flow.nodes}
             nodeTypes={nodeTypes}
             nodesConnectable={false}
@@ -247,146 +296,62 @@ function FlowWorkbench() {
               variant={BackgroundVariant.Cross}
             />
           </ReactFlow>
+
           {!materialized?.journey ? (
             <div className="empty-state">
-              <strong>No renderable journey yet</strong>
-              <p>Fix parse or validation errors, or paste a UJG graph document with at least one Journey item.</p>
+              <strong>No journey to render</strong>
+              <p>Paste a valid `UJGDocument` payload with Graph ED nodes in `nodes` and select a journey.</p>
             </div>
           ) : null}
-        </section>
-      </main>
-
-      <aside className="panel panel--right">
-        <section className="info-card">
-          <h2>Validation</h2>
-          <div className="button-row button-row--stats">
-            <div className="status-chip error">
-              <strong>{errorCount}</strong>
-              <span>errors</span>
-            </div>
-            <div className="status-chip warning">
-              <strong>{warningCount}</strong>
-              <span>warnings</span>
-            </div>
-          </div>
-          <ul className="diagnostic-list">
-            {Array.from(analysis.parseErrors.entries()).map(([draftId, message]) => (
-              <li key={draftId}>
-                <strong>Parse</strong>
-                <span>{message}</span>
-              </li>
-            ))}
-            {analysis.validation.diagnostics.map((diagnostic) => (
-              <li key={JSON.stringify(diagnostic)}>
-                <strong>
-                  {diagnostic.severity.toUpperCase()} {diagnostic.code}
-                </strong>
-                <span>{diagnostic.message}</span>
-              </li>
-            ))}
-            {analysis.parseErrors.size === 0 && analysis.validation.diagnostics.length === 0 ? (
-              <li>
-                <strong>OK</strong>
-                <span>The current document set satisfies the implemented Graph ED checks.</span>
-              </li>
-            ) : null}
-          </ul>
-        </section>
-
-        <section className="info-card">
-          <h2>Effective Graph</h2>
-          <p className="muted">
-            Explicit transitions are rendered as solid edges. Outgoing-group injections are dashed. If both produce the same `from` / `to`, the edge is merged.
-          </p>
-          <pre className="json-preview">{serializedGraph}</pre>
-        </section>
-      </aside>
+        </div>
+      </section>
     </div>
   );
 }
 
-function analyzeDrafts(drafts: DocumentDraft[]): DraftAnalysis {
-  const documents: GraphDocumentInput[] = [];
-  const parseErrors = new Map<string, string>();
-
-  for (const draft of drafts) {
-    const trimmed = draft.text.trim();
-
-    if (trimmed.length === 0) {
-      continue;
-    }
-
-    try {
-      const parsed = JSON.parse(trimmed) as unknown;
-
-      if (!isJsonObject(parsed)) {
-        parseErrors.set(draft.id, "Top-level JSON value must be an object.");
-        continue;
-      }
-
-      documents.push({
-        source: draft.name,
-        document: parsed
-      });
-    } catch (error) {
-      parseErrors.set(
-        draft.id,
-        error instanceof Error ? error.message : String(error)
-      );
-    }
-  }
-
-  const index = createGraphIndex(documents);
-  const validation = validateGraph(index);
-
-  return {
-    documents,
-    parseErrors,
-    validation,
-    index,
-    journeys: index.journeys
-  };
-}
-
-function loadDrafts(): DocumentDraft[] {
-  const stored = window.localStorage.getItem(STORAGE_KEY);
-
-  if (!stored) {
-    return createSampleDrafts();
+function analyzeSource(sourceText: string): Analysis {
+  if (sourceText.trim().length === 0) {
+    const index = createGraphIndex([]);
+    return {
+      documents: [],
+      validation: validateGraph(index),
+      index
+    };
   }
 
   try {
-    const parsed = JSON.parse(stored) as unknown;
+    const parsed = JSON.parse(sourceText) as unknown;
+    const documents = normalizeDocuments(parsed);
+    const index = createGraphIndex(documents);
 
-    if (!Array.isArray(parsed)) {
-      return createSampleDrafts();
-    }
-
-    const drafts = parsed
-      .filter(isStoredDraft)
-      .map((draft) => ({
-        id: draft.id,
-        name: draft.name,
-        text: draft.text
-      }));
-
-    return drafts.length > 0 ? drafts : createSampleDrafts();
-  } catch {
-    return createSampleDrafts();
+    return {
+      documents,
+      validation: validateGraph(index),
+      index
+    };
+  } catch (error) {
+    const index = createGraphIndex([]);
+    return {
+      documents: [],
+      parseError: error instanceof Error ? error.message : String(error),
+      validation: validateGraph(index),
+      index
+    };
   }
 }
 
-function isStoredDraft(value: unknown): value is SampleDraft {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    "id" in value &&
-    "name" in value &&
-    "text" in value &&
-    typeof (value as Record<string, unknown>).id === "string" &&
-    typeof (value as Record<string, unknown>).name === "string" &&
-    typeof (value as Record<string, unknown>).text === "string"
-  );
+function normalizeDocuments(value: unknown): GraphDocumentInput[] {
+  const rawDocuments = Array.isArray(value) ? value : [value];
+
+  if (rawDocuments.some((document) => !isJsonObject(document))) {
+    throw new Error("Input must be a UJGDocument object or an array of UJGDocument objects.");
+  }
+
+  return rawDocuments.map((document, index) => ({
+    source:
+      typeof document["@id"] === "string" ? document["@id"] : `document-${index + 1}`,
+    document
+  }));
 }
 
 function isJsonObject(value: unknown): value is JsonObject {
