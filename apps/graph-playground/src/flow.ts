@@ -1,7 +1,10 @@
 import { MarkerType, type Edge, type Node } from "@xyflow/react";
-import type { MaterializedJourneyGraph } from "@jourg/graph";
+import type { MaterializedJourneyGraph, MaterializedJourneyNode } from "@jourg/graph";
+
+export type NodeMatchState = "neutral" | "matched" | "dimmed";
 
 export interface JourneyFlowNodeData extends Record<string, unknown> {
+  nodeId: string;
   label: string;
   kind: "State" | "CompositeState";
   tags: string[];
@@ -9,17 +12,35 @@ export interface JourneyFlowNodeData extends Record<string, unknown> {
   isStartState: boolean;
   subjourneyId?: string;
   source: string;
+  matchState: NodeMatchState;
 }
 
 export type JourneyFlowNode = Node<JourneyFlowNodeData, "journeyNode">;
 export type JourneyFlowEdge = Edge;
 
-export function createFlowGraph(graph: MaterializedJourneyGraph): {
+export function createFlowGraph(
+  graph: MaterializedJourneyGraph,
+  options: {
+    query?: string;
+  } = {}
+): {
   nodes: JourneyFlowNode[];
   edges: JourneyFlowEdge[];
 } {
+  const normalizedQuery = options.query?.trim().toLowerCase() ?? "";
   const depthMap = computeDepths(graph);
   const grouped = new Map<number, typeof graph.nodes>();
+  const matchIds = new Set<string>();
+
+  if (normalizedQuery.length > 0) {
+    for (const node of graph.nodes) {
+      if (matchesNode(node, normalizedQuery)) {
+        matchIds.add(node.id);
+      }
+    }
+  }
+
+  const hasActiveMatches = normalizedQuery.length > 0 && matchIds.size > 0;
 
   for (const node of graph.nodes) {
     const depth = depthMap.get(node.id) ?? 0;
@@ -37,46 +58,75 @@ export function createFlowGraph(graph: MaterializedJourneyGraph): {
           id: node.id,
           type: "journeyNode",
           position: {
-            x: depth * 320,
-            y: index * 190
+            x: depth * 360,
+            y: index * 226
           },
           data: {
+            nodeId: node.id,
             label: node.label,
             kind: node.type,
             tags: node.tags,
             membership: node.membership,
             isStartState: node.isStartState,
             subjourneyId: node.subjourneyId,
-            source: node.source
+            source: node.source,
+            matchState: getMatchState(node.id, hasActiveMatches, matchIds)
           }
         }))
     );
 
-  const edges = graph.edges.map<JourneyFlowEdge>((edge) => ({
-    id: edge.id,
-    source: edge.from,
-    target: edge.to,
-    label: edge.label ?? edge.kind,
-    animated: edge.kind !== "explicit",
-    markerEnd: { type: MarkerType.ArrowClosed },
-    style:
-      edge.kind === "injected"
-        ? { stroke: "#6d8899", strokeDasharray: "7 5", strokeWidth: 1.9 }
-        : edge.kind === "mixed"
-          ? { stroke: "#0e6f59", strokeWidth: 2.6 }
-          : { stroke: "#234d77", strokeWidth: 2.2 },
-    labelStyle: {
-      fill: "#243447",
-      fontSize: 11,
-      fontFamily: "\"IBM Plex Mono\", monospace"
-    },
-    labelBgStyle: {
-      fill: "rgba(255, 251, 245, 0.95)"
-    },
-    labelBgPadding: [8, 4],
-    labelBgBorderRadius: 8,
-    type: "smoothstep"
-  }));
+  const edges = graph.edges.map<JourneyFlowEdge>((edge) => {
+    const stroke =
+      edge.kind === "mixed"
+        ? "#5f6ff7"
+        : edge.kind === "injected"
+          ? "#97a2f3"
+          : "#7c88ff";
+    const isDimmed =
+      hasActiveMatches &&
+      !matchIds.has(edge.from) &&
+      !matchIds.has(edge.to);
+
+    return {
+      id: edge.id,
+      source: edge.from,
+      target: edge.to,
+      label: edge.label,
+      animated: edge.kind === "mixed",
+      markerEnd: {
+        type: MarkerType.ArrowClosed,
+        color: stroke,
+        width: 18,
+        height: 18
+      },
+      style:
+        edge.kind === "injected"
+          ? {
+              opacity: isDimmed ? 0.28 : 0.86,
+              stroke,
+              strokeDasharray: "8 6",
+              strokeWidth: 1.85
+            }
+          : {
+              opacity: isDimmed ? 0.28 : 0.96,
+              stroke,
+              strokeWidth: edge.kind === "mixed" ? 2.45 : 2.1
+            },
+      labelStyle: {
+        fill: "#65718a",
+        fontSize: 11,
+        fontWeight: 600,
+        fontFamily: "\"IBM Plex Mono\", monospace"
+      },
+      labelBgStyle: {
+        fill: "rgba(252, 253, 255, 0.96)",
+        stroke: "rgba(206, 214, 231, 0.9)"
+      },
+      labelBgPadding: [7, 4],
+      labelBgBorderRadius: 999,
+      type: "smoothstep"
+    };
+  });
 
   return { nodes, edges };
 }
@@ -129,4 +179,28 @@ function computeDepths(graph: MaterializedJourneyGraph): Map<string, number> {
   }
 
   return depths;
+}
+
+function getMatchState(
+  nodeId: string,
+  hasActiveMatches: boolean,
+  matchIds: Set<string>
+): NodeMatchState {
+  if (!hasActiveMatches) {
+    return "neutral";
+  }
+
+  return matchIds.has(nodeId) ? "matched" : "dimmed";
+}
+
+function matchesNode(node: MaterializedJourneyNode, query: string): boolean {
+  return [
+    node.id,
+    node.label,
+    node.subjourneyId,
+    node.source,
+    ...node.tags
+  ]
+    .filter((value): value is string => typeof value === "string")
+    .some((value) => value.toLowerCase().includes(query));
 }

@@ -13,9 +13,11 @@ import {
   Controls,
   MiniMap,
   ReactFlow,
-  ReactFlowProvider
+  ReactFlowProvider,
+  useNodesState,
+  useReactFlow
 } from "@xyflow/react";
-import { useDeferredValue, useEffect, useMemo, useState } from "react";
+import { startTransition, useDeferredValue, useEffect, useMemo, useState } from "react";
 
 import {
   createFlowGraph,
@@ -48,7 +50,7 @@ const SAMPLE_INPUT = JSON.stringify(
           "@id": "urn:ujg:transition:home-to-checkout",
           from: "urn:ujg:state:home",
           to: "urn:ujg:state:checkout-flow",
-          label: "Buy Now"
+          label: "Buy now"
         },
         {
           "@type": "Transition",
@@ -60,13 +62,13 @@ const SAMPLE_INPUT = JSON.stringify(
         {
           "@type": "State",
           "@id": "urn:ujg:state:home",
-          label: "Home Page",
-          tags: ["phase:landing"]
+          label: "Home page",
+          tags: ["landing", "marketing"]
         },
         {
           "@type": "CompositeState",
           "@id": "urn:ujg:state:checkout-flow",
-          label: "Checkout Process",
+          label: "Checkout process",
           subjourneyId: "urn:ujg:journey:checkout"
         },
         {
@@ -130,12 +132,23 @@ const SAMPLE_INPUT = JSON.stringify(
   2
 );
 
+const EMPTY_FLOW = {
+  nodes: [],
+  edges: []
+} satisfies {
+  nodes: JourneyFlowNode[];
+  edges: JourneyFlowEdge[];
+};
+
 interface Analysis {
   documents: GraphDocumentInput[];
   parseError?: string;
   validation: GraphValidationResult;
   index: ReturnType<typeof createGraphIndex>;
 }
+
+type JourneyLayoutMemory = Record<string, { x: number; y: number }>;
+type LayoutMemory = Record<string, JourneyLayoutMemory>;
 
 const nodeTypes = {
   journeyNode: JourneyCanvasNode
@@ -144,7 +157,12 @@ const nodeTypes = {
 function FlowWorkbench() {
   const [sourceText, setSourceText] = useState(SAMPLE_INPUT);
   const [selectedJourneyId, setSelectedJourneyId] = useState("");
+  const [nodeQuery, setNodeQuery] = useState("");
+  const [layoutMemory, setLayoutMemory] = useState<LayoutMemory>({});
+  const [nodes, setNodes, onNodesChange] = useNodesState<JourneyFlowNode>([]);
+  const [edges, setEdges] = useState<JourneyFlowEdge[]>([]);
   const deferredSourceText = useDeferredValue(sourceText);
+  const { fitView } = useReactFlow<JourneyFlowNode, JourneyFlowEdge>();
 
   const analysis = useMemo(() => analyzeSource(deferredSourceText), [deferredSourceText]);
   const journeys = useMemo(
@@ -171,10 +189,40 @@ function FlowWorkbench() {
   const flow = useMemo(
     () =>
       materialized?.journey
-        ? createFlowGraph(materialized)
-        : { nodes: [], edges: [] },
-    [materialized]
+        ? createFlowGraph(materialized, { query: nodeQuery })
+        : EMPTY_FLOW,
+    [materialized, nodeQuery]
   );
+
+  const renderSignature = useMemo(() => {
+    if (!materialized?.journey) {
+      return "empty";
+    }
+
+    return [
+      materialized.journey.id,
+      materialized.nodes.map((node) => node.id).join("|"),
+      materialized.edges.map((edge) => edge.id).join("|")
+    ].join("::");
+  }, [materialized]);
+
+  useEffect(() => {
+    const savedPositions = selectedJourneyId ? layoutMemory[selectedJourneyId] ?? {} : {};
+    setNodes(applySavedPositions(flow.nodes, savedPositions));
+    setEdges(flow.edges);
+  }, [flow, selectedJourneyId, setNodes]);
+
+  useEffect(() => {
+    if (!materialized?.journey) {
+      return;
+    }
+
+    const handle = window.setTimeout(() => {
+      void fitView({ duration: 220, padding: 0.22 });
+    }, 50);
+
+    return () => window.clearTimeout(handle);
+  }, [fitView, renderSignature]);
 
   const errorCount =
     (analysis.parseError ? 1 : 0) +
@@ -182,129 +230,273 @@ function FlowWorkbench() {
   const warningCount = analysis.validation.diagnostics.filter(
     (diagnostic) => diagnostic.severity === "warning"
   ).length;
+  const matchedCount = flow.nodes.filter((node) => node.data.matchState === "matched").length;
+  const isSearchActive = nodeQuery.trim().length > 0;
+
+  function resetLayout() {
+    if (!selectedJourneyId) {
+      return;
+    }
+
+    setLayoutMemory((current) => {
+      const next = { ...current };
+      delete next[selectedJourneyId];
+      return next;
+    });
+    setNodes(flow.nodes);
+    window.setTimeout(() => {
+      void fitView({ duration: 220, padding: 0.22 });
+    }, 40);
+  }
+
+  function fitCanvas() {
+    if (nodes.length === 0) {
+      return;
+    }
+
+    void fitView({ duration: 220, padding: 0.22 });
+  }
 
   return (
     <div className="app-shell">
-      <section className="composer">
-        <p className="eyebrow">Core + Graph schema</p>
-        <h1>UJG Graph Playground</h1>
-        <p className="lede">
-          Paste one `UJGDocument` or an array of `UJGDocument`s. The playground reads Graph ED
-          nodes from `nodes`, validates references, and renders the selected journey in React Flow.
-        </p>
-
-        <div className="button-row">
-          <button type="button" onClick={() => setSourceText(SAMPLE_INPUT)}>
-            Load sample
-          </button>
-          <button type="button" onClick={() => setSourceText("")}>
-            Clear
-          </button>
-        </div>
-
-        <textarea
-          aria-label="UJG document input"
-          className="source-input"
-          spellCheck={false}
-          value={sourceText}
-          onChange={(event) => setSourceText(event.target.value)}
-        />
-
-        <div className="summary-grid">
-          <div className="summary-chip">
-            <strong>{analysis.documents.length}</strong>
-            <span>documents</span>
+      <div className="app-surface">
+        <header className="app-header">
+          <div className="app-heading">
+            <p className="breadcrumbs">Workflows &rsaquo; UJG Graph &rsaquo; Sandbox</p>
+            <h1>Sandbox</h1>
+            <p className="lede">
+              Paste one `UJGDocument` or an array of documents that follow Core and Graph ED,
+              then drag nodes directly on the canvas to refine the rendered layout.
+            </p>
           </div>
-          <div className="summary-chip">
-            <strong>{journeys.length}</strong>
-            <span>journeys</span>
+
+          <div className="header-metrics">
+            <MetricCard label="Documents" value={analysis.documents.length} />
+            <MetricCard label="Journeys" value={journeys.length} />
+            <MetricCard label="Errors" tone="error" value={errorCount} />
+            <MetricCard label="Warnings" tone="warning" value={warningCount} />
           </div>
-          <div className="summary-chip error">
-            <strong>{errorCount}</strong>
-            <span>errors</span>
-          </div>
-          <div className="summary-chip warning">
-            <strong>{warningCount}</strong>
-            <span>warnings</span>
-          </div>
-        </div>
+        </header>
 
-        <section className="diagnostics-card">
-          <h2>Diagnostics</h2>
-          <ul className="diagnostic-list">
-            {analysis.parseError ? (
-              <li>
-                <strong>PARSE</strong>
-                <span>{analysis.parseError}</span>
-              </li>
-            ) : null}
-            {analysis.validation.diagnostics.map((diagnostic) => (
-              <li key={JSON.stringify(diagnostic)}>
-                <strong>
-                  {diagnostic.severity.toUpperCase()} {diagnostic.code}
-                </strong>
-                <span>{diagnostic.message}</span>
-              </li>
-            ))}
-            {!analysis.parseError && analysis.validation.diagnostics.length === 0 ? (
-              <li>
-                <strong>OK</strong>
-                <span>The current payload satisfies the implemented Core and Graph shape assumptions.</span>
-              </li>
-            ) : null}
-          </ul>
-        </section>
-      </section>
+        <div className="workspace">
+          <aside className="inspector">
+            <section className="panel">
+              <div className="panel__header">
+                <div>
+                  <p className="panel__eyebrow">Input</p>
+                  <h2>UJG documents</h2>
+                </div>
+                <div className="button-row">
+                  <button
+                    type="button"
+                    className="ghost-button"
+                    onClick={() => {
+                      startTransition(() => {
+                        setSourceText(SAMPLE_INPUT);
+                        setNodeQuery("");
+                      });
+                    }}
+                  >
+                    Load sample
+                  </button>
+                  <button
+                    type="button"
+                    className="ghost-button"
+                    onClick={() => {
+                      startTransition(() => {
+                        setSourceText("");
+                        setNodeQuery("");
+                      });
+                    }}
+                  >
+                    Clear
+                  </button>
+                </div>
+              </div>
 
-      <section className="viewer">
-        <div className="viewer-toolbar">
-          <label className="journey-picker">
-            <span>Journey</span>
-            <select
-              value={selectedJourneyId}
-              onChange={(event) => setSelectedJourneyId(event.target.value)}
-            >
-              {journeys.length === 0 ? <option value="">No journeys found</option> : null}
-              {journeys.map((journey) => (
-                <option key={journey.id} value={journey.id}>
-                  {journey.id}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
+              <textarea
+                aria-label="UJG document input"
+                className="source-input"
+                spellCheck={false}
+                value={sourceText}
+                onChange={(event) => setSourceText(event.target.value)}
+              />
 
-        <div className="canvas-frame">
-          <ReactFlow<JourneyFlowNode, JourneyFlowEdge>
-            key={selectedJourneyId || "empty"}
-            fitView
-            fitViewOptions={{ padding: 0.18 }}
-            edges={flow.edges}
-            minZoom={0.35}
-            nodes={flow.nodes}
-            nodeTypes={nodeTypes}
-            nodesConnectable={false}
-            nodesDraggable={false}
-            proOptions={{ hideAttribution: true }}
-          >
-            <MiniMap className="playground-minimap" pannable zoomable />
-            <Controls position="bottom-right" />
-            <Background
-              color="rgba(24, 63, 96, 0.18)"
-              gap={22}
-              size={1.1}
-              variant={BackgroundVariant.Cross}
-            />
-          </ReactFlow>
+              <p className="panel__hint">
+                Accepts a single document object or an array. Graph entities must live in
+                `nodes`, and graph references must remain string IRIs.
+              </p>
+            </section>
 
-          {!materialized?.journey ? (
-            <div className="empty-state">
-              <strong>No journey to render</strong>
-              <p>Paste a valid `UJGDocument` payload with Graph ED nodes in `nodes` and select a journey.</p>
+            <section className="panel">
+              <div className="panel__header panel__header--stack">
+                <div>
+                  <p className="panel__eyebrow">Validation</p>
+                  <h2>Diagnostics</h2>
+                </div>
+                <p className="panel__hint">
+                  Parser issues are shown first. The rest comes from the implemented Core + Graph
+                  validation pass.
+                </p>
+              </div>
+
+              <ul className="diagnostic-list">
+                {analysis.parseError ? (
+                  <li className="diagnostic-item diagnostic-item--error">
+                    <strong>PARSE</strong>
+                    <span>{analysis.parseError}</span>
+                  </li>
+                ) : null}
+                {analysis.validation.diagnostics.map((diagnostic) => (
+                  <li
+                    key={JSON.stringify(diagnostic)}
+                    className={`diagnostic-item diagnostic-item--${diagnostic.severity}`}
+                  >
+                    <strong>
+                      {diagnostic.severity.toUpperCase()} {diagnostic.code}
+                    </strong>
+                    <span>{diagnostic.message}</span>
+                  </li>
+                ))}
+                {!analysis.parseError && analysis.validation.diagnostics.length === 0 ? (
+                  <li className="diagnostic-item diagnostic-item--ok">
+                    <strong>OK</strong>
+                    <span>The current payload satisfies the implemented Core and Graph assumptions.</span>
+                  </li>
+                ) : null}
+              </ul>
+            </section>
+          </aside>
+
+          <section className="workspace-main">
+            <div className="canvas-toolbar">
+              <div className="canvas-toolbar__group">
+                <div>
+                  <p className="panel__eyebrow">Journey graph</p>
+                  <h2>Rendered journey</h2>
+                </div>
+                <label className="journey-picker">
+                  <span>Journey</span>
+                  <select
+                    value={selectedJourneyId}
+                    onChange={(event) => setSelectedJourneyId(event.target.value)}
+                  >
+                    {journeys.length === 0 ? <option value="">No journeys found</option> : null}
+                    {journeys.map((journey) => (
+                      <option key={journey.id} value={journey.id}>
+                        {journey.id}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+
+              <div className="canvas-toolbar__actions">
+                <label className="search-field">
+                  <span className="search-field__icon" aria-hidden="true">
+                    ⌕
+                  </span>
+                  <input
+                    type="search"
+                    placeholder="Search nodes"
+                    value={nodeQuery}
+                    onChange={(event) => setNodeQuery(event.target.value)}
+                  />
+                </label>
+                <button type="button" className="ghost-button" onClick={resetLayout}>
+                  Reset layout
+                </button>
+                <button type="button" className="ghost-button" onClick={fitCanvas}>
+                  Fit view
+                </button>
+              </div>
             </div>
-          ) : null}
+
+            <div className="canvas-frame">
+              <div className="canvas-caption">
+                <span className="canvas-caption__primary">
+                  {materialized?.journey?.id ?? "No journey selected"}
+                </span>
+                <span className="canvas-caption__secondary">
+                  {isSearchActive
+                    ? matchedCount > 0
+                      ? `${matchedCount} match${matchedCount === 1 ? "" : "es"}`
+                      : "No matches"
+                    : "Drag nodes to refine the layout"}
+                </span>
+              </div>
+
+              <ReactFlow<JourneyFlowNode, JourneyFlowEdge>
+                edges={edges}
+                fitViewOptions={{ padding: 0.22 }}
+                maxZoom={1.45}
+                minZoom={0.4}
+                nodeTypes={nodeTypes}
+                nodes={nodes}
+                nodesConnectable={false}
+                onNodeDragStop={(_event, node) => {
+                  if (!selectedJourneyId) {
+                    return;
+                  }
+
+                  setLayoutMemory((current) => ({
+                    ...current,
+                    [selectedJourneyId]: {
+                      ...(current[selectedJourneyId] ?? {}),
+                      [node.id]: node.position
+                    }
+                  }));
+                }}
+                onNodesChange={onNodesChange}
+                panOnDrag
+                proOptions={{ hideAttribution: true }}
+                selectionOnDrag={false}
+              >
+                <MiniMap
+                  className="playground-minimap"
+                  pannable
+                  zoomable
+                  nodeBorderRadius={12}
+                  nodeColor={(node) =>
+                    node.data?.kind === "CompositeState" ? "#f3e7da" : "#e9eefb"
+                  }
+                />
+                <Controls position="bottom-left" showInteractive={false} />
+                <Background
+                  color="rgba(142, 153, 179, 0.33)"
+                  gap={28}
+                  size={1}
+                  variant={BackgroundVariant.Dots}
+                />
+              </ReactFlow>
+
+              {!materialized?.journey ? (
+                <div className="empty-state">
+                  <strong>No journey to render</strong>
+                  <p>Paste valid Graph ED nodes into `UJGDocument.nodes`, then select a journey.</p>
+                </div>
+              ) : null}
+            </div>
+          </section>
         </div>
-      </section>
+      </div>
+    </div>
+  );
+}
+
+function MetricCard({
+  label,
+  tone = "neutral",
+  value
+}: {
+  label: string;
+  tone?: "neutral" | "error" | "warning";
+  value: number;
+}) {
+  return (
+    <div className={`metric-card metric-card--${tone}`}>
+      <strong>{value}</strong>
+      <span>{label}</span>
     </div>
   );
 }
@@ -356,6 +548,22 @@ function normalizeDocuments(value: unknown): GraphDocumentInput[] {
 
 function isJsonObject(value: unknown): value is JsonObject {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function applySavedPositions(
+  nodes: JourneyFlowNode[],
+  positions: JourneyLayoutMemory
+): JourneyFlowNode[] {
+  return nodes.map((node) => {
+    const savedPosition = positions[node.id];
+
+    return savedPosition
+      ? {
+          ...node,
+          position: savedPosition
+        }
+      : node;
+  });
 }
 
 export default function App() {
