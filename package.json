@@ -6,14 +6,28 @@
     "build": "pnpm -r build",
     "dev": "pnpm -r dev",
     "dev:cli": "node --conditions=development --import tsx ./packages/jourg/src/index.ts",
-    "lint": "pnpm -r lint",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "typecheck": "pnpm -r --if-present typecheck && pnpm --dir packages/resolver typecheck",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
     "spec:sync": "pnpm --filter @jourg/spec-sync sync",
     "test": "pnpm -r test",
     "playground": "pnpm --filter ujg-graph-playground dev",
-    "playground:build": "pnpm --filter ujg-graph-playground build"
+    "playground:build": "pnpm --filter ujg-graph-playground build",
+    "prepare": "husky"
   },
   "devDependencies": {
+    "@eslint/js": "^9.39.4",
+    "eslint": "^9.39.4",
+    "eslint-plugin-react": "^7.37.5",
+    "eslint-plugin-react-hooks": "^7.0.1",
+    "globals": "^17.4.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.4.0",
+    "prettier": "^3.8.1",
     "tsx": "^4.20.6",
-    "typescript": "^5.8.2"
+    "typescript": "^5.8.2",
+    "typescript-eslint": "^8.58.0"
   }
 }

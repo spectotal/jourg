@@ -20,6 +20,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "dev": "tsc -p tsconfig.json --watch",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "tsc -p tsconfig.json --noEmit",
     "sync": "node ./scripts/sync.mjs",
     "test": "pnpm run build && node --test test/*.test.mjs"
