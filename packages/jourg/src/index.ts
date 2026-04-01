@@ -1,8 +1,14 @@
 #!/usr/bin/env node
 
-import { resolveDocument, type ResolveOptions } from "@jourg/resolver";
+import {
+  compileGraphIR,
+  GraphCompileError,
+  type GraphCompileOptions,
+  type GraphDiagnostic,
+  type GraphIR
+} from "@jourg/graph";
 
-interface ResolveCliOptions extends ResolveOptions {
+interface CompileCliOptions extends GraphCompileOptions {
   format: "json" | "summary";
 }
 
@@ -14,12 +20,12 @@ async function main() {
     return;
   }
 
-  if (command !== "resolve") {
+  if (command !== "compile") {
     console.error(`Unknown command: ${command}`);
     process.exit(1);
   }
 
-  const { entry, options } = parseResolveArgs(args);
+  const { entry, options } = parseCompileArgs(args);
 
   if (!entry) {
     console.error("Missing entry path or URL.");
@@ -27,23 +33,30 @@ async function main() {
     process.exit(1);
   }
 
-  const bundle = await resolveDocument(entry, options);
+  try {
+    const graph = await compileGraphIR({ kind: "locator", entry }, options);
 
-  if (options.format === "json") {
-    console.log(JSON.stringify(bundle, null, 2));
-  } else {
-    printSummary(bundle);
-  }
+    if (options.format === "json") {
+      console.log(JSON.stringify(graph, null, 2));
+    } else {
+      printSummary(graph);
+    }
+  } catch (error) {
+    if (error instanceof GraphCompileError) {
+      printDiagnostics(error.diagnostics, options.format);
+      process.exit(1);
+    }
 
-  if (!bundle.validation.ok) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(message);
     process.exit(1);
   }
 }
 
-function parseResolveArgs(args: string[]): { entry?: string; options: ResolveCliOptions } {
-  const options: ResolveCliOptions = {
+function parseCompileArgs(args: string[]): { entry?: string; options: CompileCliOptions } {
+  const options: CompileCliOptions = {
     format: "summary",
-    mode: "consumer"
+    specVersionPolicy: "strict"
   };
 
   let entry: string | undefined;
@@ -72,18 +85,14 @@ function parseResolveArgs(args: string[]): { entry?: string; options: ResolveCli
 
     const next = args[index + 1];
 
-    if ((value === "--mode" || value === "--format" || value === "--max-depth") && !next) {
+    if (
+      (value === "--format" || value === "--max-depth" || value === "--spec-version-policy") &&
+      !next
+    ) {
       throw new Error(`Missing value for ${value}.`);
     }
 
     switch (value) {
-      case "--mode":
-        if (next !== "consumer" && next !== "producer") {
-          throw new Error(`Unsupported mode: ${next}`);
-        }
-        options.mode = next;
-        index += 1;
-        break;
       case "--format":
         if (next !== "json" && next !== "summary") {
           throw new Error(`Unsupported format: ${next}`);
@@ -98,6 +107,13 @@ function parseResolveArgs(args: string[]): { entry?: string; options: ResolveCli
         }
         index += 1;
         break;
+      case "--spec-version-policy":
+        if (next !== "strict" && next !== "entry-major") {
+          throw new Error(`Unsupported spec version policy: ${next}`);
+        }
+        options.specVersionPolicy = next;
+        index += 1;
+        break;
       default:
         throw new Error(`Unknown option: ${value}`);
     }
@@ -106,41 +122,66 @@ function parseResolveArgs(args: string[]): { entry?: string; options: ResolveCli
   return { entry, options };
 }
 
-function printSummary(bundle: Awaited<ReturnType<typeof resolveDocument>>) {
-  const warningCount = bundle.validation.diagnostics.filter(
-    (diagnostic) => diagnostic.severity === "warning"
-  ).length;
-  const errorCount = bundle.validation.diagnostics.length - warningCount;
+function printSummary(graph: GraphIR) {
+  console.log(`Entry: ${graph.entry}`);
+  console.log(`Spec version: ${graph.specVersion}`);
+  console.log(`Documents: ${graph.documents.length}`);
+  console.log(`Journeys: ${graph.journeys.length}`);
+  console.log(`Entities: ${countEntities(graph)}`);
+  console.log(`Warnings: ${graph.warnings.length}`);
+  console.log("Compilation: ok");
 
-  console.log(`Entry: ${bundle.entry}`);
-  console.log(`Mode: ${bundle.mode}`);
-  console.log(`Documents: ${bundle.documents.length}`);
-  console.log(`Imports: ${bundle.imports.length}`);
-  console.log(`Materialized entities: ${bundle.materialized.entities.length}`);
-  console.log(`Diagnostics: ${errorCount} errors, ${warningCount} warnings`);
-  console.log(
-    `Extension handlers: ${
-      bundle.activeExtensionHandlers.length > 0
-        ? bundle.activeExtensionHandlers.join(", ")
-        : "none"
-    }`
-  );
-  console.log(`Validation: ${bundle.validation.ok ? "ok" : "failed"}`);
-
-  if (bundle.validation.diagnostics.length === 0) {
+  if (graph.warnings.length === 0) {
     return;
   }
 
   console.log("");
-  console.log("Diagnostics:");
+  console.log("Warnings:");
 
-  for (const diagnostic of bundle.validation.diagnostics) {
-    const location = diagnostic.path ? ` (${diagnostic.path})` : "";
-    const source = diagnostic.source ? ` [${diagnostic.source}]` : "";
-    console.log(
-      `- ${diagnostic.severity.toUpperCase()} ${diagnostic.code}${source}${location}: ${diagnostic.message}`
-    );
+  for (const warning of graph.warnings) {
+    console.log(formatDiagnostic(warning));
   }
+}
+
+function printDiagnostics(diagnostics: readonly GraphDiagnostic[], format: CompileCliOptions["format"]) {
+  if (format === "json") {
+    console.error(
+      JSON.stringify(
+        {
+          error: "GraphCompileError",
+          diagnostics
+        },
+        null,
+        2
+      )
+    );
+    return;
+  }
+
+  console.error("Compilation failed.");
+  console.error("");
+
+  for (const diagnostic of diagnostics) {
+    console.error(formatDiagnostic(diagnostic));
+  }
+}
+
+function formatDiagnostic(diagnostic: GraphDiagnostic): string {
+  const source = diagnostic.source ? ` [${diagnostic.source}]` : "";
+  const path = diagnostic.path ? ` (${diagnostic.path})` : "";
+
+  return `- ${diagnostic.severity.toUpperCase()} ${diagnostic.code}${source}${path}: ${diagnostic.message}`;
+}
+
+function countEntities(graph: GraphIR): number {
+  return (
+    graph.entities.journeys.length +
+    graph.entities.states.length +
+    graph.entities.compositeStates.length +
+    graph.entities.transitions.length +
+    graph.entities.outgoingTransitionGroups.length +
+    graph.entities.outgoingTransitions.length
+  );
 }
 
 function printHelp() {
@@ -148,7 +189,9 @@ function printHelp() {
   console.log("");
   console.log("Usage:");
   console.log("  jourg help");
-  console.log("  jourg resolve <entry> [--mode consumer|producer] [--format summary|json] [--json] [--max-depth N] [--allow-cycles]");
+  console.log(
+    "  jourg compile <entry> [--format summary|json] [--json] [--max-depth N] [--allow-cycles] [--spec-version-policy strict|entry-major]"
+  );
 }
 
 main().catch((error) => {

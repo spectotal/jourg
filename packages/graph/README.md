@@ -1,34 +1,40 @@
 # @jourg/graph
 
-`@jourg/graph` implements the current UJG Graph Editor's Draft from <https://ujg.specs.openuji.org/ed/graph> on top of the Core `UJGDocument.nodes` shape.
+`@jourg/graph` compiles compact UJG documents into bundle-level Graph IR.
 
-It expects Graph ED nodes to be stored in `UJGDocument.nodes` using the schema shown in the spec appendix:
+The compiler pipeline is:
 
-- `@type: "UJGDocument"` on the document
-- `nodes: [...]` for contained graph nodes
-- `@type` / `@id` on graph nodes
-- string IRI references for `startState`, `stateRefs`, `transitionRefs`, `outgoingTransitionGroupRefs`, `outgoingTransitionRefs`, `from`, `to`, and `subjourneyId`
+- load source
+- resolve imports
+- validate Core
+- extract Graph entities
+- validate Graph references
+- inject outgoing transition groups
+- emit Graph IR
 
 ## API
 
 ```ts
-import {
-  createGraphIndex,
-  materializeJourney,
-  validateGraph
-} from "@jourg/graph";
+import { compileGraphIR } from "@jourg/graph";
 
-const index = createGraphIndex([
-  { source: "main-site.jsonld", document: mainDocument },
-  { source: "checkout.jsonld", document: checkoutDocument }
-]);
-
-const validation = validateGraph(index);
-const journey = materializeJourney(index, "urn:ujg:journey:main-site");
+const graph = await compileGraphIR({
+  kind: "memory",
+  entry: "https://example.com/main.jsonld",
+  documents: [
+    { source: "https://example.com/main.jsonld", document: mainDocument },
+    { source: "https://example.com/checkout.jsonld", document: checkoutDocument }
+  ]
+});
 ```
 
-`materializeJourney()` returns the selected journey plus:
+`compileGraphIR()` throws `GraphCompileError` when any error-level diagnostic is present. On success it returns:
 
-- member and referenced state nodes needed for rendering
-- effective explicit and injected edges
-- deduplicated explicit/injected overlaps with origin metadata
+- `documents`: resolved source provenance and normalized imports
+- `entities`: canonical journeys, states, transitions, outgoing groups, and outgoing transitions
+- `journeys`: compiled per-journey views with injected effective edges
+- `warnings`: non-fatal diagnostics such as malformed extension namespaces
+
+The compiler accepts:
+
+- locator input: `{ kind: "locator", entry }`
+- memory input: `{ kind: "memory", entry, documents }`

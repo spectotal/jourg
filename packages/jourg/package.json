@@ -13,10 +13,12 @@
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
+    "dev:cli": "node --conditions=development --import tsx ./src/index.ts",
+    "test": "pnpm run build && node --test test/*.test.mjs",
     "prepublishOnly": "pnpm build"
   },
   "dependencies": {
-    "@jourg/resolver": "workspace:*"
+    "@jourg/graph": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^25.5.0",

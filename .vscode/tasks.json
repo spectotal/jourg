@@ -1,0 +1,15 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "build graph + cli",
+      "type": "process",
+      "command": "pnpm",
+      "args": ["-r", "--filter", "@jourg/graph", "--filter", "jourg", "build"],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": "$tsc"
+    }
+  ]
+}

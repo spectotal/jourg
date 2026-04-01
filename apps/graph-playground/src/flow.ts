@@ -1,5 +1,10 @@
 import { MarkerType, type Edge, type Node } from "@xyflow/react";
-import type { MaterializedJourneyGraph, MaterializedJourneyNode } from "@jourg/graph";
+import type {
+  CompositeStateEntity,
+  GraphIR,
+  GraphIRJourney,
+  StateEntity
+} from "@jourg/graph";
 
 export type NodeMatchState = "neutral" | "matched" | "dimmed";
 
@@ -19,7 +24,8 @@ export type JourneyFlowNode = Node<JourneyFlowNodeData, "journeyNode">;
 export type JourneyFlowEdge = Edge;
 
 export function createFlowGraph(
-  graph: MaterializedJourneyGraph,
+  graph: GraphIR,
+  journey: GraphIRJourney,
   options: {
     query?: string;
   } = {}
@@ -28,12 +34,13 @@ export function createFlowGraph(
   edges: JourneyFlowEdge[];
 } {
   const normalizedQuery = options.query?.trim().toLowerCase() ?? "";
-  const depthMap = computeDepths(graph);
-  const grouped = new Map<number, typeof graph.nodes>();
+  const renderableNodes = buildRenderableNodes(graph, journey);
+  const depthMap = computeDepths(renderableNodes, journey);
+  const grouped = new Map<number, typeof renderableNodes>();
   const matchIds = new Set<string>();
 
   if (normalizedQuery.length > 0) {
-    for (const node of graph.nodes) {
+    for (const node of renderableNodes) {
       if (matchesNode(node, normalizedQuery)) {
         matchIds.add(node.id);
       }
@@ -42,7 +49,7 @@ export function createFlowGraph(
 
   const hasActiveMatches = normalizedQuery.length > 0 && matchIds.size > 0;
 
-  for (const node of graph.nodes) {
+  for (const node of renderableNodes) {
     const depth = depthMap.get(node.id) ?? 0;
     const bucket = grouped.get(depth) ?? [];
     bucket.push(node);
@@ -75,7 +82,7 @@ export function createFlowGraph(
         }))
     );
 
-  const edges = graph.edges.map<JourneyFlowEdge>((edge) => {
+  const edges = journey.edges.map<JourneyFlowEdge>((edge) => {
     const stroke =
       edge.kind === "mixed"
         ? "#5f6ff7"
@@ -131,18 +138,49 @@ export function createFlowGraph(
   return { nodes, edges };
 }
 
-function computeDepths(graph: MaterializedJourneyGraph): Map<string, number> {
+function buildRenderableNodes(
+  graph: GraphIR,
+  journey: GraphIRJourney
+): RenderableNode[] {
+  const entities = new Map(
+    [...graph.entities.states, ...graph.entities.compositeStates].map((entity) => [entity.id, entity])
+  );
+  const memberStateIds = new Set(journey.memberStateIds);
+
+  return journey.nodeIds
+    .map((nodeId) => {
+      const entity = entities.get(nodeId);
+
+      if (!entity) {
+        return null;
+      }
+
+      return {
+        id: entity.id,
+        type: entity.type,
+        label: entity.label,
+        tags: entity.tags,
+        membership: memberStateIds.has(entity.id) ? "member" : "referenced",
+        isStartState: entity.id === journey.startStateId,
+        subjourneyId: entity.type === "CompositeState" ? entity.subjourneyId : undefined,
+        source: entity.source
+      } satisfies RenderableNode;
+    })
+    .filter((value) => value !== null);
+}
+
+function computeDepths(nodes: readonly RenderableNode[], journey: GraphIRJourney): Map<string, number> {
   const adjacency = new Map<string, string[]>();
   const depths = new Map<string, number>();
   const queue: string[] = [];
-  const startNode = graph.nodes.find((node) => node.isStartState) ?? graph.nodes[0];
+  const startNode = nodes.find((node) => node.isStartState) ?? nodes[0];
 
   if (startNode) {
     depths.set(startNode.id, 0);
     queue.push(startNode.id);
   }
 
-  for (const edge of graph.edges) {
+  for (const edge of journey.edges) {
     const bucket = adjacency.get(edge.from) ?? [];
     bucket.push(edge.to);
     adjacency.set(edge.from, bucket);
@@ -169,7 +207,7 @@ function computeDepths(graph: MaterializedJourneyGraph): Map<string, number> {
 
   let fallbackDepth = depths.size > 0 ? Math.max(...depths.values()) + 1 : 0;
 
-  for (const node of graph.nodes) {
+  for (const node of nodes) {
     if (depths.has(node.id)) {
       continue;
     }
@@ -193,7 +231,7 @@ function getMatchState(
   return matchIds.has(nodeId) ? "matched" : "dimmed";
 }
 
-function matchesNode(node: MaterializedJourneyNode, query: string): boolean {
+function matchesNode(node: RenderableNode, query: string): boolean {
   return [
     node.id,
     node.label,
@@ -203,4 +241,15 @@ function matchesNode(node: MaterializedJourneyNode, query: string): boolean {
   ]
     .filter((value): value is string => typeof value === "string")
     .some((value) => value.toLowerCase().includes(query));
+}
+
+interface RenderableNode {
+  id: string;
+  type: StateEntity["type"] | CompositeStateEntity["type"];
+  label: string;
+  tags: string[];
+  membership: "member" | "referenced";
+  isStartState: boolean;
+  subjourneyId?: string;
+  source: string;
 }

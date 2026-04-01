@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
 
 import {
   GRAPH_CONTEXT_URLS,
@@ -10,7 +12,7 @@ import {
   SPEC_SYNC_MANIFEST
 } from "../dist/index.js";
 
-const PACKAGE_ROOT = resolve(import.meta.dirname, "..");
+const PACKAGE_ROOT = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const EXPECTED_FILES = [
   "artifacts/ed/ns/core",
   "artifacts/ed/ns/core.context.jsonld",
@@ -49,12 +51,10 @@ test("sync script is deterministic against the current upstream artifacts", asyn
 
   try {
     const command = `node ./packages/spec-sync/scripts/sync.mjs --output-dir ${JSON.stringify(directory)}`;
-    await import("node:child_process").then(({ execFileSync }) =>
-      execFileSync("/bin/zsh", ["-lc", command], {
-        cwd: resolve(PACKAGE_ROOT, "../.."),
-        stdio: "pipe"
-      })
-    );
+    execFileSync("/bin/zsh", ["-lc", command], {
+      cwd: resolve(PACKAGE_ROOT, "../.."),
+      stdio: "pipe"
+    });
 
     for (const relativePath of [...EXPECTED_FILES, "artifacts/manifest.json", "src/generated.ts"]) {
       const expected = await readFile(join(PACKAGE_ROOT, relativePath), "utf8");

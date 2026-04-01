@@ -5,18 +5,61 @@ export interface JsonObject {
   [key: string]: JsonValue | undefined;
 }
 
-export interface GraphDocument extends JsonObject {
+export interface ExtensionMap {
+  [namespace: string]: JsonObject;
+}
+
+export interface UJGNode extends JsonObject {
+  "@id"?: string;
+  "@type"?: string;
+  extensions?: ExtensionMap;
+}
+
+export interface UJGDocument extends JsonObject {
   "@context"?: JsonValue;
   "@id"?: string;
   "@type"?: string;
   specVersion?: string;
   imports?: string[];
   nodes?: JsonValue[];
+  items?: JsonValue[];
+  extensions?: JsonObject;
 }
 
-export interface GraphDocumentInput {
-  document: JsonObject;
-  source?: string;
+export interface LoadedGraphSource {
+  document: UJGDocument;
+  mediaType?: string;
+}
+
+export interface GraphIRLoader {
+  name: string;
+  canLoad(url: URL): boolean;
+  load(url: URL): Promise<LoadedGraphSource>;
+}
+
+export interface GraphIRLocatorInput {
+  kind: "locator";
+  entry: string | URL;
+}
+
+export interface GraphIRMemoryDocument {
+  source: string;
+  document: UJGDocument;
+}
+
+export interface GraphIRMemoryInput {
+  kind: "memory";
+  entry: string;
+  documents: readonly GraphIRMemoryDocument[];
+}
+
+export type GraphCompileInput = GraphIRLocatorInput | GraphIRMemoryInput;
+
+export interface GraphCompileOptions {
+  loaders?: readonly GraphIRLoader[];
+  maxDepth?: number;
+  allowCycles?: boolean;
+  specVersionPolicy?: "strict" | "entry-major";
 }
 
 export type GraphNodeType =
@@ -31,6 +74,7 @@ export interface GraphEntityBase {
   id: string;
   type: GraphNodeType;
   source: string;
+  path: string;
   raw: JsonObject;
 }
 
@@ -82,77 +126,93 @@ export type GraphEntity =
   | OutgoingTransitionGroupEntity
   | OutgoingTransitionEntity;
 
-export interface IndexedGraphDocument {
-  source: string;
-  document: GraphDocument;
-  nodeIds: string[];
-}
-
 export interface GraphDiagnostic {
   severity: "warning" | "error";
   code:
-    | "DUPLICATE_NODE_ID"
+    | "CYCLE_DETECTED"
+    | "DOCUMENT_EXTENSIONS_NOT_ALLOWED"
+    | "DUPLICATE_ID"
+    | "EXTENSION_NAMESPACE_FORMAT"
+    | "INVALID_DOCUMENT"
+    | "INVALID_EXTENSION_PAYLOAD"
+    | "INVALID_IMPORT"
+    | "LOAD_FAILED"
+    | "MAX_DEPTH_EXCEEDED"
+    | "SPEC_VERSION_MISMATCH"
     | "GRAPH_REFERENCE_MISSING"
     | "GRAPH_REFERENCE_TYPE"
-    | "INVALID_GRAPH_DOCUMENT"
-    | "INVALID_GRAPH_NODE"
-    | "JOURNEY_NOT_FOUND";
+    | "INVALID_GRAPH_NODE";
   message: string;
   source?: string;
-  nodeId?: string;
   path?: string;
+  entityId?: string;
   refId?: string;
-  expectedType?: GraphNodeType | "StateLike";
+  importRef?: string;
+  resolvedImport?: string;
+  expectedType?: GraphNodeType | "StateLike" | "PublishedContext";
+  actualType?: string;
 }
 
-export interface GraphValidationResult {
-  ok: boolean;
-  diagnostics: GraphDiagnostic[];
+export interface GraphIRDocumentImport {
+  from: string;
+  request: string;
+  resolved: string | null;
+  status: "resolved" | "unresolved" | "cycle" | "invalid";
+  via?: string;
 }
 
-export interface GraphIndex {
-  documents: IndexedGraphDocument[];
-  nodes: Map<string, GraphEntity>;
-  journeys: Map<string, JourneyEntity>;
-  states: Map<string, StateEntity>;
-  compositeStates: Map<string, CompositeStateEntity>;
-  transitions: Map<string, TransitionEntity>;
-  outgoingTransitionGroups: Map<string, OutgoingTransitionGroupEntity>;
-  outgoingTransitions: Map<string, OutgoingTransitionEntity>;
-  diagnostics: GraphDiagnostic[];
+export interface GraphIRDocument {
+  source: string;
+  loader: string;
+  documentId?: string;
+  specVersion?: string;
+  normalizedImports: string[];
+  imports: GraphIRDocumentImport[];
 }
 
-export interface EffectiveEdgeOrigin {
+export interface GraphIRJourneyEdgeOrigin {
   kind: "explicit" | "injected";
+  source: string;
   transitionId?: string;
   groupId?: string;
   outgoingTransitionId?: string;
   label?: string;
 }
 
-export interface MaterializedJourneyNode {
-  id: string;
-  type: "State" | "CompositeState";
-  label: string;
-  tags: string[];
-  membership: "member" | "referenced";
-  isStartState: boolean;
-  subjourneyId?: string;
-  source: string;
-}
-
-export interface MaterializedJourneyEdge {
+export interface GraphIRJourneyEdge {
   id: string;
   from: string;
   to: string;
   label?: string;
   kind: "explicit" | "injected" | "mixed";
-  origins: EffectiveEdgeOrigin[];
+  origins: GraphIRJourneyEdgeOrigin[];
 }
 
-export interface MaterializedJourneyGraph {
-  journey: JourneyEntity | null;
-  nodes: MaterializedJourneyNode[];
-  edges: MaterializedJourneyEdge[];
-  diagnostics: GraphDiagnostic[];
+export interface GraphIRJourney {
+  id: string;
+  source: string;
+  startStateId: string;
+  memberStateIds: string[];
+  includedStateIds: string[];
+  nodeIds: string[];
+  edges: GraphIRJourneyEdge[];
+}
+
+export interface GraphIREntities {
+  journeys: JourneyEntity[];
+  states: StateEntity[];
+  compositeStates: CompositeStateEntity[];
+  transitions: TransitionEntity[];
+  outgoingTransitionGroups: OutgoingTransitionGroupEntity[];
+  outgoingTransitions: OutgoingTransitionEntity[];
+}
+
+export interface GraphIR {
+  kind: "GraphIR";
+  entry: string;
+  specVersion: string;
+  warnings: GraphDiagnostic[];
+  documents: GraphIRDocument[];
+  entities: GraphIREntities;
+  journeys: GraphIRJourney[];
 }

@@ -1,29 +1,31 @@
-export {
-  createGraphIndex,
-  materializeJourney,
-  validateGraph
-} from "./graph.js";
+export { compileGraphIR } from "./compiler.js";
+export { GraphCompileError } from "./errors.js";
 export type {
   CompositeStateEntity,
-  EffectiveEdgeOrigin,
+  GraphCompileInput,
+  GraphCompileOptions,
   GraphDiagnostic,
-  GraphDocument,
-  GraphDocumentInput,
   GraphEntity,
-  GraphIndex,
+  GraphIR,
+  GraphIRDocument,
+  GraphIRDocumentImport,
+  GraphIRJourney,
+  GraphIRJourneyEdge,
+  GraphIRJourneyEdgeOrigin,
+  GraphIRLoader,
   GraphNodeType,
-  GraphValidationResult,
-  IndexedGraphDocument,
   JourneyEntity,
   JsonObject,
   JsonPrimitive,
   JsonValue,
-  MaterializedJourneyEdge,
-  MaterializedJourneyGraph,
-  MaterializedJourneyNode,
+  LoadedGraphSource,
+  GraphIRLocatorInput,
+  GraphIRMemoryDocument,
+  GraphIRMemoryInput,
   OutgoingTransitionEntity,
   OutgoingTransitionGroupEntity,
+  UJGDocument,
+  UJGNode,
   StateEntity,
-  StateLikeEntity,
   TransitionEntity
 } from "./types.js";

@@ -1,11 +1,11 @@
 import {
-  createGraphIndex,
-  materializeJourney,
-  validateGraph,
-  type GraphDocumentInput,
-  type GraphValidationResult,
+  compileGraphIR,
+  GraphCompileError,
+  type GraphDiagnostic,
+  type GraphIR,
+  type GraphIRJourney,
+  type GraphIRMemoryDocument,
   type JsonObject,
-  type MaterializedJourneyGraph
 } from "@jourg/graph";
 import {
   Background,
@@ -141,10 +141,10 @@ const EMPTY_FLOW = {
 };
 
 interface Analysis {
-  documents: GraphDocumentInput[];
+  documents: GraphIRMemoryDocument[];
+  diagnostics: GraphDiagnostic[];
+  graph: GraphIR | null;
   parseError?: string;
-  validation: GraphValidationResult;
-  index: ReturnType<typeof createGraphIndex>;
 }
 
 type JourneyLayoutMemory = Record<string, { x: number; y: number }>;
@@ -156,6 +156,11 @@ const nodeTypes = {
 
 function FlowWorkbench() {
   const [sourceText, setSourceText] = useState(SAMPLE_INPUT);
+  const [analysis, setAnalysis] = useState<Analysis>({
+    documents: [],
+    diagnostics: [],
+    graph: null
+  });
   const [selectedJourneyId, setSelectedJourneyId] = useState("");
   const [nodeQuery, setNodeQuery] = useState("");
   const [layoutMemory, setLayoutMemory] = useState<LayoutMemory>({});
@@ -164,10 +169,81 @@ function FlowWorkbench() {
   const deferredSourceText = useDeferredValue(sourceText);
   const { fitView } = useReactFlow<JourneyFlowNode, JourneyFlowEdge>();
 
-  const analysis = useMemo(() => analyzeSource(deferredSourceText), [deferredSourceText]);
+  useEffect(() => {
+    let cancelled = false;
+
+    async function runAnalysis() {
+      if (deferredSourceText.trim().length === 0) {
+        if (!cancelled) {
+          setAnalysis({
+            documents: [],
+            diagnostics: [],
+            graph: null
+          });
+        }
+        return;
+      }
+
+      try {
+        const parsed = JSON.parse(deferredSourceText) as unknown;
+        const documents = normalizeDocuments(parsed);
+        const entry = documents[0]?.source ?? "memory://workspace/document-1.jsonld";
+
+        try {
+          const graph = await compileGraphIR({
+            kind: "memory",
+            entry,
+            documents
+          });
+
+          if (!cancelled) {
+            setAnalysis({
+              documents,
+              diagnostics: graph.warnings,
+              graph
+            });
+          }
+        } catch (error) {
+          if (!cancelled) {
+            if (error instanceof GraphCompileError) {
+              setAnalysis({
+                documents,
+                diagnostics: error.diagnostics,
+                graph: null
+              });
+              return;
+            }
+
+            setAnalysis({
+              documents: [],
+              diagnostics: [],
+              graph: null,
+              parseError: error instanceof Error ? error.message : String(error)
+            });
+          }
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setAnalysis({
+            documents: [],
+            diagnostics: [],
+            graph: null,
+            parseError: error instanceof Error ? error.message : String(error)
+          });
+        }
+      }
+    }
+
+    void runAnalysis();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [deferredSourceText]);
+
   const journeys = useMemo(
-    () => Array.from(analysis.index.journeys.values()).sort((left, right) => left.id.localeCompare(right.id)),
-    [analysis.index]
+    () => analysis.graph?.journeys ?? [],
+    [analysis.graph]
   );
 
   useEffect(() => {
@@ -178,33 +254,33 @@ function FlowWorkbench() {
     setSelectedJourneyId(journeys[0]?.id ?? "");
   }, [journeys, selectedJourneyId]);
 
-  const materialized = useMemo<MaterializedJourneyGraph | null>(() => {
+  const selectedJourney = useMemo<GraphIRJourney | null>(() => {
     if (!selectedJourneyId) {
       return null;
     }
 
-    return materializeJourney(analysis.index, selectedJourneyId);
-  }, [analysis.index, selectedJourneyId]);
+    return analysis.graph?.journeys.find((journey) => journey.id === selectedJourneyId) ?? null;
+  }, [analysis.graph, selectedJourneyId]);
 
   const flow = useMemo(
     () =>
-      materialized?.journey
-        ? createFlowGraph(materialized, { query: nodeQuery })
+      analysis.graph && selectedJourney
+        ? createFlowGraph(analysis.graph, selectedJourney, { query: nodeQuery })
         : EMPTY_FLOW,
-    [materialized, nodeQuery]
+    [analysis.graph, nodeQuery, selectedJourney]
   );
 
   const renderSignature = useMemo(() => {
-    if (!materialized?.journey) {
+    if (!selectedJourney) {
       return "empty";
     }
 
     return [
-      materialized.journey.id,
-      materialized.nodes.map((node) => node.id).join("|"),
-      materialized.edges.map((edge) => edge.id).join("|")
+      selectedJourney.id,
+      selectedJourney.nodeIds.join("|"),
+      selectedJourney.edges.map((edge) => edge.id).join("|")
     ].join("::");
-  }, [materialized]);
+  }, [selectedJourney]);
 
   useEffect(() => {
     const savedPositions = selectedJourneyId ? layoutMemory[selectedJourneyId] ?? {} : {};
@@ -213,7 +289,7 @@ function FlowWorkbench() {
   }, [flow, selectedJourneyId, setNodes]);
 
   useEffect(() => {
-    if (!materialized?.journey) {
+    if (!selectedJourney) {
       return;
     }
 
@@ -226,8 +302,8 @@ function FlowWorkbench() {
 
   const errorCount =
     (analysis.parseError ? 1 : 0) +
-    analysis.validation.diagnostics.filter((diagnostic) => diagnostic.severity === "error").length;
-  const warningCount = analysis.validation.diagnostics.filter(
+    analysis.diagnostics.filter((diagnostic) => diagnostic.severity === "error").length;
+  const warningCount = analysis.diagnostics.filter(
     (diagnostic) => diagnostic.severity === "warning"
   ).length;
   const matchedCount = flow.nodes.filter((node) => node.data.matchState === "matched").length;
@@ -334,9 +410,9 @@ function FlowWorkbench() {
                   <p className="panel__eyebrow">Validation</p>
                   <h2>Diagnostics</h2>
                 </div>
-                <p className="panel__hint">
-                  Parser issues are shown first. The rest comes from the implemented Core + Graph
-                  validation pass.
+                  <p className="panel__hint">
+                  Parser issues are shown first. The rest comes from the compiler&apos;s Core + Graph
+                  diagnostics.
                 </p>
               </div>
 
@@ -347,7 +423,7 @@ function FlowWorkbench() {
                     <span>{analysis.parseError}</span>
                   </li>
                 ) : null}
-                {analysis.validation.diagnostics.map((diagnostic) => (
+                {analysis.diagnostics.map((diagnostic) => (
                   <li
                     key={JSON.stringify(diagnostic)}
                     className={`diagnostic-item diagnostic-item--${diagnostic.severity}`}
@@ -358,10 +434,10 @@ function FlowWorkbench() {
                     <span>{diagnostic.message}</span>
                   </li>
                 ))}
-                {!analysis.parseError && analysis.validation.diagnostics.length === 0 ? (
+                {!analysis.parseError && analysis.diagnostics.length === 0 && analysis.graph ? (
                   <li className="diagnostic-item diagnostic-item--ok">
                     <strong>OK</strong>
-                    <span>The current payload satisfies the implemented Core and Graph assumptions.</span>
+                    <span>The current payload compiled successfully to Graph IR.</span>
                   </li>
                 ) : null}
               </ul>
@@ -381,8 +457,8 @@ function FlowWorkbench() {
                     value={selectedJourneyId}
                     onChange={(event) => setSelectedJourneyId(event.target.value)}
                   >
-                    {journeys.length === 0 ? <option value="">No journeys found</option> : null}
-                    {journeys.map((journey) => (
+                  {journeys.length === 0 ? <option value="">No journeys found</option> : null}
+                  {journeys.map((journey) => (
                       <option key={journey.id} value={journey.id}>
                         {journey.id}
                       </option>
@@ -415,7 +491,7 @@ function FlowWorkbench() {
             <div className="canvas-frame">
               <div className="canvas-caption">
                 <span className="canvas-caption__primary">
-                  {materialized?.journey?.id ?? "No journey selected"}
+                  {selectedJourney?.id ?? "No journey selected"}
                 </span>
                 <span className="canvas-caption__secondary">
                   {isSearchActive
@@ -470,10 +546,10 @@ function FlowWorkbench() {
                 />
               </ReactFlow>
 
-              {!materialized?.journey ? (
+              {!selectedJourney ? (
                 <div className="empty-state">
                   <strong>No journey to render</strong>
-                  <p>Paste valid Graph ED nodes into `UJGDocument.nodes`, then select a journey.</p>
+                  <p>Paste valid UJG documents that compile to Graph IR, then select a journey.</p>
                 </div>
               ) : null}
             </div>
@@ -501,38 +577,7 @@ function MetricCard({
   );
 }
 
-function analyzeSource(sourceText: string): Analysis {
-  if (sourceText.trim().length === 0) {
-    const index = createGraphIndex([]);
-    return {
-      documents: [],
-      validation: validateGraph(index),
-      index
-    };
-  }
-
-  try {
-    const parsed = JSON.parse(sourceText) as unknown;
-    const documents = normalizeDocuments(parsed);
-    const index = createGraphIndex(documents);
-
-    return {
-      documents,
-      validation: validateGraph(index),
-      index
-    };
-  } catch (error) {
-    const index = createGraphIndex([]);
-    return {
-      documents: [],
-      parseError: error instanceof Error ? error.message : String(error),
-      validation: validateGraph(index),
-      index
-    };
-  }
-}
-
-function normalizeDocuments(value: unknown): GraphDocumentInput[] {
+function normalizeDocuments(value: unknown): GraphIRMemoryDocument[] {
   const rawDocuments = Array.isArray(value) ? value : [value];
 
   if (rawDocuments.some((document) => !isJsonObject(document))) {
@@ -540,14 +585,23 @@ function normalizeDocuments(value: unknown): GraphDocumentInput[] {
   }
 
   return rawDocuments.map((document, index) => ({
-    source:
-      typeof document["@id"] === "string" ? document["@id"] : `document-${index + 1}`,
+    source: getDocumentSource(document, index),
     document
   }));
 }
 
 function isJsonObject(value: unknown): value is JsonObject {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function getDocumentSource(document: JsonObject, index: number): string {
+  const documentId = typeof document["@id"] === "string" ? document["@id"] : undefined;
+
+  if (documentId && /^(?:https?|file|memory):/i.test(documentId)) {
+    return documentId;
+  }
+
+  return `memory://workspace/document-${index + 1}.jsonld`;
 }
 
 function applySavedPositions(

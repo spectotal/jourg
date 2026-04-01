@@ -1,0 +1,32 @@
+{
+  "@context": "https://ujg.specs.openuji.org/ed/ns/context.jsonld",
+  "@id": "https://fixtures.example/imports/checkout.jsonld",
+  "@type": "UJGDocument",
+  "specVersion": "1.0",
+  "nodes": [
+    {
+      "@type": "Journey",
+      "@id": "urn:ujg:journey:checkout",
+      "startState": "urn:ujg:state:shipping",
+      "stateRefs": ["urn:ujg:state:shipping", "urn:ujg:state:payment"],
+      "transitionRefs": ["urn:ujg:transition:shipping-to-payment"]
+    },
+    {
+      "@type": "State",
+      "@id": "urn:ujg:state:shipping",
+      "label": "Shipping"
+    },
+    {
+      "@type": "State",
+      "@id": "urn:ujg:state:payment",
+      "label": "Payment"
+    },
+    {
+      "@type": "Transition",
+      "@id": "urn:ujg:transition:shipping-to-payment",
+      "from": "urn:ujg:state:shipping",
+      "to": "urn:ujg:state:payment",
+      "label": "Continue"
+    }
+  ]
+}

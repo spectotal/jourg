@@ -1,0 +1,20 @@
+{
+  "@context": "https://ujg.specs.openuji.org/ed/ns/context.jsonld",
+  "@id": "https://fixtures.example/invalid/entry.jsonld",
+  "@type": "UJGDocument",
+  "specVersion": "1.0",
+  "nodes": [
+    {
+      "@type": "Journey",
+      "@id": "urn:ujg:journey:broken",
+      "startState": "urn:ujg:state:missing",
+      "stateRefs": ["urn:ujg:state:home"],
+      "transitionRefs": ["urn:ujg:state:home"]
+    },
+    {
+      "@type": "State",
+      "@id": "urn:ujg:state:home",
+      "label": "Home"
+    }
+  ]
+}

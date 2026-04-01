@@ -1,54 +1,46 @@
 # jourg
 
-> A [UJG (User Journey Graph)](https://ujg.specs.openuji.org/ed/architecture) implementation — computable user experience as a deterministic protocol.
+> A [UJG (User Journey Graph)](https://ujg.specs.openuji.org/ed/architecture) implementation focused on compiling compact UJG documents into Graph IR.
 
-`jourg` implements the UJG specification: a layered standard for representing, executing, and analyzing user journeys as structured graph data. The goal is a single source of truth for Designers, Developers, and Analysts — from intent definition through runtime observation to conformance measurement.
+`jourg` currently implements a Graph-first compiler pipeline: compact UJG documents go through import resolution, Core/Graph validation, outgoing-transition injection, and end up as Graph IR that apps can visualize or consume.
 
 ---
 
-## Architecture → Packages
+## Current Workspace
 
-The UJG spec defines a **five-layer conceptual stack**. This monorepo maps each layer to a discrete package:
+The UJG specification defines a broader multi-layer architecture. This workspace currently implements the Graph compiler core:
 
-| Layer | Concern | Package |
-|---|---|---|
-| **Core** (Transport) | JSON-LD envelope; universal parseability | `@jourg/core` |
-| **Graph** (Definition) | States, Transitions, Composition (sub-journey refs) | `@jourg/graph` |
-| **Experience** (Semantic) | Steps, Touchpoints, Phases, Pain Points | `@jourg/experience` |
-| **Runtime** (Execution) | Actual user paths as causal event chains | `@jourg/runtime` |
-| **Mapping** (Conformance) | Intent vs reality; conversion metrics, friction points | `@jourg/mapping` |
-| **Core Import Resolution** (Interop) | Consumer/producer import graph resolution for `UJGDocument` bundles | `@jourg/resolver` |
+| Package | Concern |
+|---|---|
+| `@jourg/graph` | UJG to Graph IR compiler |
+| `@jourg/spec-sync` | Synced Core/Graph vocab, context, and shape artifacts |
+| `jourg` | CLI wrapper around `@jourg/graph` |
+| `ujg-graph-playground` | Browser playground that compiles pasted documents in memory |
 
-Each package is independently publishable. The `jourg` CLI (`packages/jourg`) is the profile-aware entrypoint that composes them.
+`jourg compile` is the main entrypoint today.
 
-```
+```text
 apps/
-└── graph-playground/ # React Flow playground for pasted UJG graph documents
+└── graph-playground/ # React Flow playground for pasted UJG documents compiled to Graph IR
 
 packages/
-├── jourg/        # CLI — profile loader and command dispatcher
-├── core/         # Layer 1: Transport — JSON-LD envelope & URI identity
-├── graph/        # Layer 2: Definition — automata-style journey graph
-├── experience/   # Layer 3: Semantic — qualitative UX intent as data
-├── runtime/      # Layer 4: Execution — session event chains
-├── mapping/      # Layer 5: Conformance — graph overlay & metrics
-└── resolver/     # Cross-layer: UJGDocument import resolution (consumer/producer)
+├── jourg/        # CLI — compile UJG documents to Graph IR
+├── graph/        # Compiler pipeline — resolve/import/validate/inject -> Graph IR
+└── spec-sync/    # Internal synced spec artifacts
 ```
 
 ---
 
 ## Profiles
 
-Not every tool needs every layer. Following the [UJG Profiles](https://ujg.specs.openuji.org/ed/profiles) approach, `jourg` ships **named capability sets** — profiles — that declare which layers a given use-case requires:
+Not every tool needs every UJG layer. The current workspace is intentionally narrower than the full conceptual stack and targets the graph profile first:
 
-| Profile | Layers included | Use-case |
+| Profile | Capability | Use-case |
 |---|---|---|
-| `graph-core` | core + graph | Authoring & validating journey definitions |
-| `graph-composition` | core + graph (with sub-journey refs) | Modular, reusable journey building |
-| `runtime-basic` | core + graph + runtime | Recording live user paths |
-| `runtime-mapped` | all layers | Full conformance: intent vs observed reality |
+| `graph-core` | compact UJG -> Graph IR | Authoring, validating, and visualizing journey definitions |
+| `graph-composition` | graph-core + subjourney refs | Modular journey building |
 
-A profile is declared at the document level in the journey file and consumed by the CLI to load only the required packages. Extensions follow URI-namespaced conventions to prevent collision and support graceful degradation when a profile feature is absent.
+Future UJG layers remain planned, but are not implemented in this workspace yet.
 
 ---
 
@@ -56,8 +48,8 @@ A profile is declared at the document level in the journey file and consumed by 
 
 - **Graph First** — journeys are automata (states + transitions), not URL sequences
 - **Stable Identity** — all entities are URI-identified, surviving architectural change
-- **Separation of Concerns** — immutable journey definitions are distinct from ephemeral session instances
-- **Vendor Neutrality** — this repo implements data structures, not a visualization framework
+- **Separation of Concerns** — immutable journey definitions are distinct from compiled IR
+- **Vendor Neutrality** — this repo implements data structures and compiler stages, not a visualization framework
 
 ---
 
@@ -72,10 +64,11 @@ pnpm build
 
 # Run the CLI
 npx jourg help
+npx jourg compile ./journeys/entry.jsonld
 ```
 
 ---
 
 ## Status
 
-Implementation of the [UJG W3C Community Group Draft](https://ujg.specs.openuji.org/ed/architecture) (last spec update: 2026-01-28). Currently implementing `graph-core` profile, with resolver and graph MVP packages plus a React Flow playground for pasted UJG graph documents.
+Implementation of the [UJG W3C Community Group Draft](https://ujg.specs.openuji.org/ed/architecture) (last spec update: 2026-04-01). The current codebase implements a strict Graph compiler pipeline and Graph IR playground on top of synced Core and Graph spec artifacts.
