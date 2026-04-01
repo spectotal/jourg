@@ -6,6 +6,8 @@
     "build": "pnpm -r build",
     "dev": "pnpm -r dev",
     "lint": "pnpm -r lint",
+    "spec:sync": "pnpm --filter @jourg/spec-sync sync",
+    "test": "pnpm -r test",
     "playground": "pnpm --filter ujg-graph-playground dev",
     "playground:build": "pnpm --filter ujg-graph-playground build"
   },
