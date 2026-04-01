@@ -1,4 +1,10 @@
-import type { GraphDiagnostic, GraphNodeType, JsonObject, JsonValue } from "../types.js";
+import type {
+  GraphCompileOptions,
+  GraphDiagnostic,
+  GraphNodeType,
+  JsonObject,
+  JsonValue
+} from "../types.js";
 
 export const DEFAULT_MAX_DEPTH = 32;
 
@@ -32,6 +38,10 @@ export function toDocumentUrl(entry: string | URL): URL {
 
 export function cloneJson<T extends JsonValue>(value: T): T {
   return structuredClone(value);
+}
+
+export function getMaxDepth(options: GraphCompileOptions): number {
+  return options.maxDepth ?? DEFAULT_MAX_DEPTH;
 }
 
 export function isJsonObject(value: unknown): value is JsonObject {

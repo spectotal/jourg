@@ -2,24 +2,24 @@
 
 ## Source to Graph IR
 
-`compileGraphIR()` in `packages/graph/src/compiler.ts` moves loaded source through a fixed set of bundle shapes:
+`compileGraphIR()` in `packages/graph/src/compiler.ts` moves loaded source through a fixed set of stage values:
 
 1. `prepareSourceInput()` in `packages/graph/src/internal/source.ts`
    Converts CLI or API input into a `PreparedSourceInput` with an `entryUrl` and ordered loaders.
-2. `resolveBundle()` in `packages/graph/src/internal/resolve.ts`
+2. `resolveSources()` in `packages/graph/src/internal/resolve.ts`
    Calls loaders, parses each `LoadedGraphSource`, normalizes relative imports against the current URL, and records loader provenance in `ResolvedDocument`.
-3. `validateCoreBundle()` in `packages/graph/src/internal/validate-core.ts`
+3. `validateCore()` in `packages/graph/src/internal/validate-core.ts`
    Verifies top-level UJG document shape, required contexts, spec-version compatibility, extension payloads, and duplicate `@id` values.
-4. `extractGraphBundle()` in `packages/graph/src/internal/extract-graph.ts`
+4. `extractGraph()` in `packages/graph/src/internal/extract-graph.ts`
    Walks `document.normalizedDocument.nodes`, recognizes graph node types, and converts JSON objects into typed entities plus lookup maps.
-5. `validateGraphBundle()` in `packages/graph/src/internal/validate-graph.ts`
+5. `validateGraph()` in `packages/graph/src/internal/validate-graph.ts`
    Resolves graph references by `@id`, enforces expected target types, and checks that `transitionRefs` stay within a journey's `stateRefs`.
 6. `injectJourneys()` in `packages/graph/src/internal/inject.ts`
    Expands outgoing transition groups into effective per-journey edges and merges them with explicit transitions.
 7. `emitGraphIR()` in `packages/graph/src/internal/ir.ts`
-   Clones the validated internal bundle into the public `GraphIR` shape.
+   Clones the validated stage values into the public `GraphIR` shape.
 
-The internal state types that connect those stages live in `packages/graph/src/internal/state.ts`.
+The internal stage types that connect those stages live in `packages/graph/src/internal/state.ts`.
 
 ## Breakpoint Map
 
@@ -50,9 +50,9 @@ This repo now includes three launch configurations in `.vscode/launch.json`:
 - `jourg: compile fixture (imports)`
   Happy-path file fixture that exercises file loading, relative import normalization, extraction, graph validation, and outgoing-transition injection.
 - `jourg: compile fixture (invalid refs)`
-  Broken graph references that fail in `validateGraphBundle()`.
+  Broken graph references that fail in `validateGraph()`.
 - `jourg: compile fixture (cycle)`
-  Import cycle fixture that fails in `resolveBundle()`.
+  Import cycle fixture that fails in `resolveSources()`.
 
 Each launch config runs the built CLI entrypoint in `packages/jourg/dist/index.js` and uses source maps from `packages/*/dist/**/*.js`, so breakpoints placed in `packages/graph/src/**/*.ts` resolve back to TypeScript.
 

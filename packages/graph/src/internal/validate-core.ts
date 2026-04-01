@@ -5,29 +5,36 @@ import {
   looksLikeExtensionNamespace
 } from "./common.js";
 import type { GraphCompileOptions, GraphDiagnostic, JsonValue, UJGDocument } from "../types.js";
-import type { CoreValidatedBundle, IdentifiedEntity, ResolvedBundle, ResolvedDocument } from "./state.js";
+import type {
+  CoreValidation,
+  IdentifiedEntity,
+  ResolvedDocument,
+  ResolvedSources,
+  StageResult
+} from "./state.js";
 const GRAPH_COMPACT_TERM_SET = new Set<string>(GRAPH_COMPACT_TERMS);
 
-export function validateCoreBundle(
-  bundle: ResolvedBundle,
+export function validateCore(
+  resolved: ResolvedSources,
   options: GraphCompileOptions
-): CoreValidatedBundle {
-  const diagnostics = [...bundle.diagnostics];
+): StageResult<CoreValidation> {
+  const diagnostics: GraphDiagnostic[] = [];
   const identifiedEntities: IdentifiedEntity[] = [];
-  const entryDocument = bundle.documents.find((document) => document.source === bundle.entry) ?? null;
+  const entryDocument = resolved.documents.find((document) => document.source === resolved.entry) ?? null;
 
-  for (const document of bundle.documents) {
+  for (const document of resolved.documents) {
     validateDocumentShape(document, diagnostics);
     collectIdentifiedEntities(document, identifiedEntities);
   }
 
-  validateSpecVersionCompatibility(bundle.documents, entryDocument, diagnostics, options);
+  validateSpecVersionCompatibility(resolved.documents, entryDocument, diagnostics, options);
   validateDuplicateIds(identifiedEntities, diagnostics);
 
   return {
-    ...bundle,
-    entryDocument,
-    identifiedEntities,
+    value: {
+      entryDocument,
+      identifiedEntities
+    },
     diagnostics
   };
 }

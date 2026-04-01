@@ -1,5 +1,4 @@
-import { cloneJson, isJsonObject, toDocumentUrl, toErrorMessage } from "./common.js";
-import { getMaxDepth } from "./source.js";
+import { cloneJson, getMaxDepth, isJsonObject, toErrorMessage } from "./common.js";
 import type {
   GraphCompileOptions,
   GraphDiagnostic,
@@ -8,7 +7,12 @@ import type {
   LoadedGraphSource,
   UJGDocument
 } from "../types.js";
-import type { PreparedSourceInput, ResolvedBundle, ResolvedDocument } from "./state.js";
+import type {
+  PreparedSourceInput,
+  ResolvedDocument,
+  ResolvedSources,
+  StageResult
+} from "./state.js";
 
 export function createFileSystemLoader(): GraphIRLoader {
   return {
@@ -87,10 +91,10 @@ export function normalizeImports(document: UJGDocument, base: URL): UJGDocument 
       };
 }
 
-export async function resolveBundle(
+export async function resolveSources(
   prepared: PreparedSourceInput,
   options: GraphCompileOptions
-): Promise<ResolvedBundle> {
+): Promise<StageResult<ResolvedSources>> {
   const documents = new Map<string, ResolvedDocument>();
   const inFlight = new Map<string, Promise<boolean>>();
   const diagnostics: GraphDiagnostic[] = [];
@@ -166,11 +170,12 @@ export async function resolveBundle(
 
     const document = cloneJson(loadedSource.document as UJGDocument);
     const normalizedDocument = normalizeImports(document, url);
+    const imports: GraphIRDocumentImport[] = [];
     const resolvedDocument: ResolvedDocument = {
       source,
       loader: loaderName,
       normalizedDocument,
-      imports: []
+      imports
     };
 
     documents.set(source, resolvedDocument);
@@ -188,7 +193,7 @@ export async function resolveBundle(
           status: "invalid"
         };
 
-        resolvedDocument.imports.push(edge);
+        imports.push(edge);
 
         if (typeof request !== "string") {
           diagnostics.push({
@@ -249,8 +254,12 @@ export async function resolveBundle(
   await visit(prepared.entryUrl, 0, []);
 
   return {
-    entry: prepared.entryUrl.href,
-    documents: Array.from(documents.values()).sort((left, right) => left.source.localeCompare(right.source)),
+    value: {
+      entry: prepared.entryUrl.href,
+      documents: Array.from(documents.values()).sort((left, right) =>
+        left.source.localeCompare(right.source)
+      )
+    },
     diagnostics
   };
 }

@@ -183,7 +183,6 @@ export interface GraphIRJourney {
   startStateId: string;
   memberStateIds: string[];
   includedStateIds: string[];
-  nodeIds: string[];
   edges: GraphIRJourneyEdge[];
 }
 

@@ -1,4 +1,4 @@
-import { DEFAULT_MAX_DEPTH, toDocumentUrl } from "./common.js";
+import { toDocumentUrl } from "./common.js";
 import { createFileSystemLoader, createHttpLoader } from "./resolve.js";
 import type { GraphCompileInput, GraphCompileOptions } from "../types.js";
 import type { PreparedSourceInput } from "./state.js";
@@ -13,8 +13,4 @@ export function prepareSourceInput(
     entryUrl: toDocumentUrl(input.entry),
     loaders: [...customLoaders, createFileSystemLoader(), createHttpLoader()]
   };
-}
-
-export function getMaxDepth(options: GraphCompileOptions): number {
-  return options.maxDepth ?? DEFAULT_MAX_DEPTH;
 }

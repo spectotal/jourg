@@ -296,7 +296,7 @@ function FlowWorkbench() {
 
     return [
       selectedJourney.id,
-      selectedJourney.nodeIds.join("|"),
+      selectedJourney.includedStateIds.join("|"),
       selectedJourney.edges.map((edge) => edge.id).join("|")
     ].join("::");
   }, [selectedJourney]);

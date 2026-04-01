@@ -7,10 +7,15 @@ import {
   isJsonObject
 } from "./common.js";
 import type {
+  ExtractedEntities,
+  ExtractedGraph,
+  ResolvedSources,
+  StageResult
+} from "./state.js";
+import type {
   CompositeStateEntity,
   GraphDiagnostic,
   GraphEntity,
-  GraphIREntities,
   GraphNodeType,
   JourneyEntity,
   JsonObject,
@@ -19,19 +24,19 @@ import type {
   StateEntity,
   TransitionEntity
 } from "../types.js";
-import type { CoreValidatedBundle, ExtractedGraphBundle } from "./state.js";
 
-export function extractGraphBundle(bundle: CoreValidatedBundle): ExtractedGraphBundle {
-  const diagnostics = [...bundle.diagnostics];
-  const nodeMap = new Map<string, GraphEntity>();
+export function extractGraph(resolved: ResolvedSources): StageResult<ExtractedGraph> {
+  const diagnostics: GraphDiagnostic[] = [];
+  const byId = new Map<string, GraphEntity>();
+  const stateLikesById = new Map<string, StateEntity | CompositeStateEntity>();
   const journeyMap = new Map<string, JourneyEntity>();
+  const transitionMap = new Map<string, TransitionEntity>();
+  const outgoingGroupMap = new Map<string, OutgoingTransitionGroupEntity>();
+  const outgoingTransitionMap = new Map<string, OutgoingTransitionEntity>();
   const stateMap = new Map<string, StateEntity>();
   const compositeStateMap = new Map<string, CompositeStateEntity>();
-  const transitionMap = new Map<string, TransitionEntity>();
-  const outgoingTransitionGroupMap = new Map<string, OutgoingTransitionGroupEntity>();
-  const outgoingTransitionMap = new Map<string, OutgoingTransitionEntity>();
 
-  for (const document of bundle.documents) {
+  for (const document of resolved.documents) {
     const nodes = Array.isArray(document.normalizedDocument.nodes)
       ? document.normalizedDocument.nodes
       : [];
@@ -62,35 +67,30 @@ export function extractGraphBundle(bundle: CoreValidatedBundle): ExtractedGraphB
         continue;
       }
 
-      if (nodeMap.has(entity.id)) {
-        diagnostics.push({
-          severity: "error",
-          code: "DUPLICATE_ID",
-          message: `Duplicate graph node id ${entity.id} was found.`,
-          source: document.source,
-          entityId: entity.id,
-          path
-        });
+      if (byId.has(entity.id)) {
+        // Core validation already reports duplicate @id values across document and node scopes.
         continue;
       }
 
-      nodeMap.set(entity.id, entity);
+      byId.set(entity.id, entity);
 
       switch (entity.type) {
         case "Journey":
           journeyMap.set(entity.id, entity);
           break;
         case "State":
+          stateLikesById.set(entity.id, entity);
           stateMap.set(entity.id, entity);
           break;
         case "CompositeState":
+          stateLikesById.set(entity.id, entity);
           compositeStateMap.set(entity.id, entity);
           break;
         case "Transition":
           transitionMap.set(entity.id, entity);
           break;
         case "OutgoingTransitionGroup":
-          outgoingTransitionGroupMap.set(entity.id, entity);
+          outgoingGroupMap.set(entity.id, entity);
           break;
         case "OutgoingTransition":
           outgoingTransitionMap.set(entity.id, entity);
@@ -99,26 +99,28 @@ export function extractGraphBundle(bundle: CoreValidatedBundle): ExtractedGraphB
     }
   }
 
-  const entities: GraphIREntities = {
+  const entities: ExtractedEntities = {
     journeys: sortEntities(journeyMap),
     states: sortEntities(stateMap),
     compositeStates: sortEntities(compositeStateMap),
     transitions: sortEntities(transitionMap),
-    outgoingTransitionGroups: sortEntities(outgoingTransitionGroupMap),
+    outgoingTransitionGroups: sortEntities(outgoingGroupMap),
     outgoingTransitions: sortEntities(outgoingTransitionMap)
   };
 
   return {
-    ...bundle,
-    diagnostics,
-    entities,
-    nodeMap,
-    journeyMap,
-    stateMap,
-    compositeStateMap,
-    transitionMap,
-    outgoingTransitionGroupMap,
-    outgoingTransitionMap
+    value: {
+      entities,
+      index: {
+        byId,
+        stateLikesById,
+        journeysById: journeyMap,
+        transitionsById: transitionMap,
+        outgoingGroupsById: outgoingGroupMap,
+        outgoingTransitionsById: outgoingTransitionMap
+      }
+    },
+    diagnostics
   };
 }
 

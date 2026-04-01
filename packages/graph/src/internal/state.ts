@@ -1,54 +1,76 @@
 import type {
+  CompositeStateEntity,
   GraphDiagnostic,
   GraphEntity,
   GraphIRDocumentImport,
-  GraphIREntities,
   GraphIRJourney,
   GraphIRLoader,
+  JourneyEntity,
+  OutgoingTransitionEntity,
+  OutgoingTransitionGroupEntity,
+  StateEntity,
+  StateLikeEntity,
+  TransitionEntity,
   UJGDocument
 } from "../types.js";
 
+export interface StageResult<T> {
+  readonly value: T;
+  readonly diagnostics: readonly GraphDiagnostic[];
+}
+
 export interface PreparedSourceInput {
-  entryUrl: URL;
-  loaders: GraphIRLoader[];
+  readonly entryUrl: URL;
+  readonly loaders: readonly GraphIRLoader[];
 }
 
 export interface ResolvedDocument {
-  source: string;
-  loader: string;
-  normalizedDocument: UJGDocument;
-  imports: GraphIRDocumentImport[];
+  readonly source: string;
+  readonly loader: string;
+  readonly normalizedDocument: UJGDocument;
+  readonly imports: readonly GraphIRDocumentImport[];
 }
 
 export interface IdentifiedEntity {
-  id: string;
-  kind: "document" | "node";
-  source: string;
-  path: string;
+  readonly id: string;
+  readonly kind: "document" | "node";
+  readonly source: string;
+  readonly path: string;
 }
 
-export interface ResolvedBundle {
-  entry: string;
-  documents: ResolvedDocument[];
-  diagnostics: GraphDiagnostic[];
+export interface ResolvedSources {
+  readonly entry: string;
+  readonly documents: readonly ResolvedDocument[];
 }
 
-export interface CoreValidatedBundle extends ResolvedBundle {
-  entryDocument: ResolvedDocument | null;
-  identifiedEntities: IdentifiedEntity[];
+export interface CoreValidation {
+  readonly entryDocument: ResolvedDocument | null;
+  readonly identifiedEntities: readonly IdentifiedEntity[];
 }
 
-export interface ExtractedGraphBundle extends CoreValidatedBundle {
-  entities: GraphIREntities;
-  nodeMap: Map<string, GraphEntity>;
-  journeyMap: Map<string, GraphIREntities["journeys"][number]>;
-  stateMap: Map<string, GraphIREntities["states"][number]>;
-  compositeStateMap: Map<string, GraphIREntities["compositeStates"][number]>;
-  transitionMap: Map<string, GraphIREntities["transitions"][number]>;
-  outgoingTransitionGroupMap: Map<string, GraphIREntities["outgoingTransitionGroups"][number]>;
-  outgoingTransitionMap: Map<string, GraphIREntities["outgoingTransitions"][number]>;
+export interface ExtractedEntities {
+  readonly journeys: readonly JourneyEntity[];
+  readonly states: readonly StateEntity[];
+  readonly compositeStates: readonly CompositeStateEntity[];
+  readonly transitions: readonly TransitionEntity[];
+  readonly outgoingTransitionGroups: readonly OutgoingTransitionGroupEntity[];
+  readonly outgoingTransitions: readonly OutgoingTransitionEntity[];
 }
 
-export interface InjectedGraphBundle extends ExtractedGraphBundle {
-  journeys: GraphIRJourney[];
+export interface GraphEntityIndex {
+  readonly byId: ReadonlyMap<string, GraphEntity>;
+  readonly stateLikesById: ReadonlyMap<string, StateLikeEntity>;
+  readonly journeysById: ReadonlyMap<string, JourneyEntity>;
+  readonly transitionsById: ReadonlyMap<string, TransitionEntity>;
+  readonly outgoingGroupsById: ReadonlyMap<string, OutgoingTransitionGroupEntity>;
+  readonly outgoingTransitionsById: ReadonlyMap<string, OutgoingTransitionEntity>;
+}
+
+export interface ExtractedGraph {
+  readonly entities: ExtractedEntities;
+  readonly index: GraphEntityIndex;
+}
+
+export interface InjectedJourneys {
+  readonly journeys: readonly GraphIRJourney[];
 }

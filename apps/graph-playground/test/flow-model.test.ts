@@ -111,12 +111,6 @@ const graph: GraphIR = {
         "urn:ujg:state:done",
         "urn:ujg:state:orphan"
       ],
-      nodeIds: [
-        "urn:ujg:state:start",
-        "urn:ujg:state:checkout",
-        "urn:ujg:state:done",
-        "urn:ujg:state:orphan"
-      ],
       edges: [
         {
           id: "urn:ujg:state:start::urn:ujg:state:checkout",

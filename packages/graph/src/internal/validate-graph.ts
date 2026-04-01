@@ -2,24 +2,24 @@ import type {
   GraphDiagnostic,
   GraphNodeType
 } from "../types.js";
-import type { ExtractedGraphBundle } from "./state.js";
+import type { ExtractedGraph, GraphEntityIndex, StageResult } from "./state.js";
 
-export function validateGraphBundle(bundle: ExtractedGraphBundle): ExtractedGraphBundle {
-  const diagnostics = [...bundle.diagnostics];
+export function validateGraph(graph: ExtractedGraph): StageResult<ExtractedGraph> {
+  const diagnostics: GraphDiagnostic[] = [];
 
-  for (const journey of bundle.entities.journeys) {
+  for (const journey of graph.entities.journeys) {
     const memberStateIds = new Set(journey.stateRefs);
 
-    expectStateLike(bundle, diagnostics, journey.source, journey.id, "$.startState", journey.startState);
+    expectStateLike(graph.index, diagnostics, journey.source, journey.id, "$.startState", journey.startState);
 
     for (const [index, refId] of journey.stateRefs.entries()) {
-      expectStateLike(bundle, diagnostics, journey.source, journey.id, `$.stateRefs[${index}]`, refId);
+      expectStateLike(graph.index, diagnostics, journey.source, journey.id, `$.stateRefs[${index}]`, refId);
     }
 
     for (const [index, refId] of journey.transitionRefs.entries()) {
-      expectType(bundle, diagnostics, journey.source, journey.id, `$.transitionRefs[${index}]`, refId, "Transition");
+      expectType(graph.index, diagnostics, journey.source, journey.id, `$.transitionRefs[${index}]`, refId, "Transition");
       expectTransitionStateMembership(
-        bundle,
+        graph.index,
         diagnostics,
         journey.source,
         journey.id,
@@ -31,7 +31,7 @@ export function validateGraphBundle(bundle: ExtractedGraphBundle): ExtractedGrap
 
     for (const [index, refId] of journey.outgoingTransitionGroupRefs.entries()) {
       expectType(
-        bundle,
+        graph.index,
         diagnostics,
         journey.source,
         journey.id,
@@ -42,19 +42,27 @@ export function validateGraphBundle(bundle: ExtractedGraphBundle): ExtractedGrap
     }
   }
 
-  for (const transition of bundle.entities.transitions) {
-    expectStateLike(bundle, diagnostics, transition.source, transition.id, "$.from", transition.from);
-    expectStateLike(bundle, diagnostics, transition.source, transition.id, "$.to", transition.to);
+  for (const transition of graph.entities.transitions) {
+    expectStateLike(graph.index, diagnostics, transition.source, transition.id, "$.from", transition.from);
+    expectStateLike(graph.index, diagnostics, transition.source, transition.id, "$.to", transition.to);
   }
 
-  for (const compositeState of bundle.entities.compositeStates) {
-    expectType(bundle, diagnostics, compositeState.source, compositeState.id, "$.subjourneyId", compositeState.subjourneyId, "Journey");
+  for (const compositeState of graph.entities.compositeStates) {
+    expectType(
+      graph.index,
+      diagnostics,
+      compositeState.source,
+      compositeState.id,
+      "$.subjourneyId",
+      compositeState.subjourneyId,
+      "Journey"
+    );
   }
 
-  for (const group of bundle.entities.outgoingTransitionGroups) {
+  for (const group of graph.entities.outgoingTransitionGroups) {
     for (const [index, refId] of group.outgoingTransitionRefs.entries()) {
       expectType(
-        bundle,
+        graph.index,
         diagnostics,
         group.source,
         group.id,
@@ -65,18 +73,25 @@ export function validateGraphBundle(bundle: ExtractedGraphBundle): ExtractedGrap
     }
   }
 
-  for (const outgoingTransition of bundle.entities.outgoingTransitions) {
-    expectStateLike(bundle, diagnostics, outgoingTransition.source, outgoingTransition.id, "$.to", outgoingTransition.to);
+  for (const outgoingTransition of graph.entities.outgoingTransitions) {
+    expectStateLike(
+      graph.index,
+      diagnostics,
+      outgoingTransition.source,
+      outgoingTransition.id,
+      "$.to",
+      outgoingTransition.to
+    );
   }
 
   return {
-    ...bundle,
+    value: graph,
     diagnostics
   };
 }
 
 function expectTransitionStateMembership(
-  bundle: ExtractedGraphBundle,
+  index: GraphEntityIndex,
   diagnostics: GraphDiagnostic[],
   source: string,
   entityId: string,
@@ -84,7 +99,7 @@ function expectTransitionStateMembership(
   refId: string,
   memberStateIds: ReadonlySet<string>
 ) {
-  const transition = bundle.transitionMap.get(refId);
+  const transition = index.transitionsById.get(refId);
 
   if (!transition) {
     return;
@@ -116,20 +131,20 @@ function expectTransitionStateMembership(
 }
 
 function expectStateLike(
-  bundle: ExtractedGraphBundle,
+  index: GraphEntityIndex,
   diagnostics: GraphDiagnostic[],
   source: string,
   entityId: string,
   path: string,
   refId: string
 ) {
-  const target = bundle.stateMap.get(refId) ?? bundle.compositeStateMap.get(refId);
+  const target = index.stateLikesById.get(refId);
 
   if (target) {
     return;
   }
 
-  const wrongType = bundle.nodeMap.get(refId);
+  const wrongType = index.byId.get(refId);
 
   if (wrongType) {
     diagnostics.push({
@@ -159,7 +174,7 @@ function expectStateLike(
 }
 
 function expectType(
-  bundle: ExtractedGraphBundle,
+  index: GraphEntityIndex,
   diagnostics: GraphDiagnostic[],
   source: string,
   entityId: string,
@@ -167,7 +182,7 @@ function expectType(
   refId: string,
   expectedType: GraphNodeType
 ) {
-  const target = bundle.nodeMap.get(refId);
+  const target = index.byId.get(refId);
 
   if (!target) {
     diagnostics.push({

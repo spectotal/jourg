@@ -1,25 +1,24 @@
 import type {
   CompositeStateEntity,
-  GraphEntity,
   GraphIRJourney,
   GraphIRJourneyEdge,
   GraphIRJourneyEdgeOrigin,
   StateEntity
 } from "../types.js";
-import type { ExtractedGraphBundle, InjectedGraphBundle } from "./state.js";
+import type { ExtractedGraph, GraphEntityIndex, InjectedJourneys } from "./state.js";
 
 type StateLikeEntity = StateEntity | CompositeStateEntity;
 
-export function injectJourneys(bundle: ExtractedGraphBundle): InjectedGraphBundle {
-  const journeys = bundle.entities.journeys
+export function injectJourneys(graph: ExtractedGraph): InjectedJourneys {
+  const journeys = graph.entities.journeys
     .map((journey) => {
       const memberStateIds: string[] = [];
       const memberStateSet = new Set<string>();
-      const includedStateIds = new Set<string>();
+      const includedStateSet = new Set<string>();
       const edgeMap = new Map<string, GraphIRJourneyEdge>();
 
       for (const refId of journey.stateRefs) {
-        const stateLike = getStateLike(bundle, refId);
+        const stateLike = getStateLike(graph.index, refId);
 
         if (!stateLike || memberStateSet.has(refId)) {
           continue;
@@ -27,20 +26,20 @@ export function injectJourneys(bundle: ExtractedGraphBundle): InjectedGraphBundl
 
         memberStateSet.add(refId);
         memberStateIds.push(refId);
-        includedStateIds.add(refId);
+        includedStateSet.add(refId);
       }
 
-      includedStateIds.add(journey.startState);
+      includedStateSet.add(journey.startState);
 
       for (const transitionId of journey.transitionRefs) {
-        const transition = bundle.transitionMap.get(transitionId);
+        const transition = graph.index.transitionsById.get(transitionId);
 
         if (!transition) {
           continue;
         }
 
-        includedStateIds.add(transition.from);
-        includedStateIds.add(transition.to);
+        includedStateSet.add(transition.from);
+        includedStateSet.add(transition.to);
         mergeEdge(edgeMap, transition.from, transition.to, transition.label, {
           kind: "explicit",
           source: transition.source,
@@ -50,7 +49,7 @@ export function injectJourneys(bundle: ExtractedGraphBundle): InjectedGraphBundl
       }
 
       for (const groupId of journey.outgoingTransitionGroupRefs) {
-        const group = bundle.outgoingTransitionGroupMap.get(groupId);
+        const group = graph.index.outgoingGroupsById.get(groupId);
 
         if (!group) {
           continue;
@@ -58,17 +57,17 @@ export function injectJourneys(bundle: ExtractedGraphBundle): InjectedGraphBundl
 
         for (const stateId of memberStateIds) {
           for (const outgoingTransitionId of group.outgoingTransitionRefs) {
-            const outgoingTransition = bundle.outgoingTransitionMap.get(outgoingTransitionId);
+            const outgoingTransition = graph.index.outgoingTransitionsById.get(outgoingTransitionId);
 
             if (!outgoingTransition) {
               continue;
             }
 
-            if(stateId == outgoingTransition.to) {
+            if (stateId === outgoingTransition.to) {
               continue;
             }
 
-            includedStateIds.add(outgoingTransition.to);
+            includedStateSet.add(outgoingTransition.to);
             mergeEdge(edgeMap, stateId, outgoingTransition.to, outgoingTransition.label, {
               kind: "injected",
               source: outgoingTransition.source,
@@ -80,26 +79,24 @@ export function injectJourneys(bundle: ExtractedGraphBundle): InjectedGraphBundl
         }
       }
 
+      const includedStateIds = Array.from(includedStateSet).sort();
+
       return {
         id: journey.id,
         source: journey.source,
         startStateId: journey.startState,
         memberStateIds,
-        includedStateIds: Array.from(includedStateIds).sort(),
-        nodeIds: Array.from(includedStateIds).sort(),
+        includedStateIds,
         edges: Array.from(edgeMap.values()).sort((left, right) => left.id.localeCompare(right.id))
       } satisfies GraphIRJourney;
     })
     .sort((left, right) => left.id.localeCompare(right.id));
 
-  return {
-    ...bundle,
-    journeys
-  };
+  return { journeys };
 }
 
-function getStateLike(bundle: ExtractedGraphBundle, id: string): StateLikeEntity | undefined {
-  return bundle.stateMap.get(id) ?? bundle.compositeStateMap.get(id);
+function getStateLike(index: GraphEntityIndex, id: string): StateLikeEntity | undefined {
+  return index.stateLikesById.get(id);
 }
 
 function mergeEdge(

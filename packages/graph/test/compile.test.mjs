@@ -147,6 +147,61 @@ test("compileGraphIR compiles custom-loader documents with imports and injected 
     mainJourney.edges.find((edge) => edge.id === "urn:ujg:state:checkout-flow::urn:ujg:state:home")?.kind,
     "mixed"
   );
+  assert.equal(
+    mainJourney.edges.find((edge) => edge.id === "urn:ujg:state:home::urn:ujg:state:profile")?.kind,
+    "injected"
+  );
+});
+
+test("compileGraphIR preserves the public GraphIR shape", async () => {
+  const graph = await compileWithDocuments([
+    {
+      source: "https://memory.example/shape.jsonld",
+      document: {
+        "@context": CONTEXT_URL,
+        "@id": "https://memory.example/shape.jsonld",
+        "@type": "UJGDocument",
+        specVersion: "1.0",
+        nodes: [
+          {
+            "@type": "Journey",
+            "@id": "urn:ujg:journey:shape",
+            startState: "urn:ujg:state:shape-home",
+            stateRefs: ["urn:ujg:state:shape-home"],
+            transitionRefs: ["urn:ujg:transition:shape-home-self"]
+          },
+          {
+            "@type": "State",
+            "@id": "urn:ujg:state:shape-home",
+            label: "Shape home"
+          },
+          {
+            "@type": "Transition",
+            "@id": "urn:ujg:transition:shape-home-self",
+            from: "urn:ujg:state:shape-home",
+            to: "urn:ujg:state:shape-home",
+            label: "Stay"
+          }
+        ]
+      }
+    }
+  ]);
+
+  assert.ok(Object.hasOwn(graph, "documents"));
+  assert.ok(Object.hasOwn(graph, "entities"));
+  assert.ok(Object.hasOwn(graph, "journeys"));
+  assert.ok(Object.hasOwn(graph, "warnings"));
+  assert.ok(Array.isArray(graph.documents));
+  assert.ok(Array.isArray(graph.entities.states));
+  assert.ok(Array.isArray(graph.journeys));
+  assert.ok(Array.isArray(graph.warnings));
+
+  const journey = graph.journeys[0];
+
+  assert.ok(journey);
+  assert.ok(Object.hasOwn(journey, "includedStateIds"));
+  assert.ok(Array.isArray(journey.includedStateIds));
+  assert.equal(Object.hasOwn(journey, "nodeIds"), false);
 });
 
 test("compileGraphIR skips injected outgoing transition self-links", async () => {
@@ -627,6 +682,10 @@ test("compileGraphIR rejects duplicate ids and invalid subjourney targets", asyn
       const codes = new Set(error.diagnostics.map((diagnostic) => diagnostic.code));
       assert.ok(codes.has("DUPLICATE_ID"));
       assert.ok(codes.has("GRAPH_REFERENCE_TYPE"));
+      assert.equal(
+        error.diagnostics.filter((diagnostic) => diagnostic.code === "DUPLICATE_ID").length,
+        1
+      );
       return true;
     }
   );

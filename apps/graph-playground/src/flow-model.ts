@@ -46,7 +46,7 @@ export function buildRenderableNodes(graph: GraphIR, journey: GraphIRJourney): R
   const memberStateIds = new Set(journey.memberStateIds);
   const nodes: RenderableNode[] = [];
 
-  for (const nodeId of journey.nodeIds) {
+  for (const nodeId of journey.includedStateIds) {
     const entity = entities.get(nodeId);
 
     if (!entity) {

@@ -5,11 +5,11 @@ These fixtures are meant for stepping through the compiler in a debugger, not fo
 ## Fixtures
 
 - `imports/entry.jsonld`
-  Main happy-path fixture. It imports `checkout.jsonld`, so you can watch file loading and import normalization in `resolveBundle()`.
+  Main happy-path fixture. It imports `checkout.jsonld`, so you can watch file loading and import normalization in `resolveSources()`.
 - `imports/checkout.jsonld`
   Secondary document used by the imported fixture.
 - `invalid/entry.jsonld`
-  Minimal invalid graph that reaches `validateGraphBundle()` and produces reference diagnostics.
+  Minimal invalid graph that reaches `validateGraph()` and produces reference diagnostics.
 - `cycle/a.jsonld`
   Entry fixture for import-cycle debugging.
 - `cycle/b.jsonld`
