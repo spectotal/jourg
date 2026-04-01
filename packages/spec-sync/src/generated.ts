@@ -27,6 +27,25 @@ export const GRAPH_CONTEXT_URLS = {
   "graph": "https://ujg.specs.openuji.org/ed/ns/graph.context.jsonld"
 } as const;
 
+export const GRAPH_COMPACT_TERMS = [
+  "CompositeState",
+  "Journey",
+  "OutgoingTransition",
+  "OutgoingTransitionGroup",
+  "State",
+  "Transition",
+  "from",
+  "label",
+  "outgoingTransitionGroupRefs",
+  "outgoingTransitionRefs",
+  "startState",
+  "stateRefs",
+  "subjourneyId",
+  "tags",
+  "to",
+  "transitionRefs"
+] as const;
+
 export const SPEC_SYNC_MANIFEST: SpecSyncManifest = {
   "version": 1,
   "artifacts": [

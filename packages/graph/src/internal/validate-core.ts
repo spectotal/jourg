@@ -1,31 +1,12 @@
-import { GRAPH_CONTEXT_URLS } from "@jourg/spec-sync";
+import { GRAPH_COMPACT_TERMS, GRAPH_CONTEXT_URLS } from "@jourg/spec-sync";
 
 import {
   isJsonObject,
-  looksLikeExtensionNamespace,
-  uniqueDiagnostics
+  looksLikeExtensionNamespace
 } from "./common.js";
-import type { GraphCompileOptions, GraphDiagnostic, JsonObject, JsonValue, UJGDocument } from "../types.js";
+import type { GraphCompileOptions, GraphDiagnostic, JsonValue, UJGDocument } from "../types.js";
 import type { CoreValidatedBundle, IdentifiedEntity, ResolvedBundle, ResolvedDocument } from "./state.js";
-
-const GRAPH_COMPACT_TERMS = new Set([
-  "Journey",
-  "State",
-  "CompositeState",
-  "Transition",
-  "OutgoingTransition",
-  "OutgoingTransitionGroup",
-  "label",
-  "tags",
-  "startState",
-  "stateRefs",
-  "transitionRefs",
-  "outgoingTransitionGroupRefs",
-  "from",
-  "to",
-  "subjourneyId",
-  "outgoingTransitionRefs"
-]);
+const GRAPH_COMPACT_TERM_SET = new Set<string>(GRAPH_COMPACT_TERMS);
 
 export function validateCoreBundle(
   bundle: ResolvedBundle,
@@ -37,7 +18,7 @@ export function validateCoreBundle(
 
   for (const document of bundle.documents) {
     validateDocumentShape(document, diagnostics);
-    collectIdentifiedEntities(document.normalizedDocument, document.source, identifiedEntities);
+    collectIdentifiedEntities(document, identifiedEntities);
   }
 
   validateSpecVersionCompatibility(bundle.documents, entryDocument, diagnostics, options);
@@ -47,7 +28,7 @@ export function validateCoreBundle(
     ...bundle,
     entryDocument,
     identifiedEntities,
-    diagnostics: uniqueDiagnostics(diagnostics)
+    diagnostics
   };
 }
 
@@ -256,42 +237,34 @@ function validateDuplicateIds(entities: readonly IdentifiedEntity[], diagnostics
   }
 }
 
-function collectIdentifiedEntities(
-  value: JsonValue | undefined,
-  source: string,
-  entities: IdentifiedEntity[],
-  path = "$",
-  isRoot = true
-) {
-  if (Array.isArray(value)) {
-    for (const [index, item] of value.entries()) {
-      collectIdentifiedEntities(item, source, entities, `${path}[${index}]`, false);
-    }
-    return;
-  }
+function collectIdentifiedEntities(document: ResolvedDocument, entities: IdentifiedEntity[]) {
+  const value = document.normalizedDocument;
+  const documentId = typeof value["@id"] === "string" ? value["@id"] : undefined;
 
-  if (!isJsonObject(value)) {
-    return;
-  }
-
-  const id = typeof value["@id"] === "string" ? value["@id"] : undefined;
-
-  if (id) {
+  if (documentId) {
     entities.push({
-      id,
-      kind: isRoot ? "document" : "node",
-      source,
-      path,
-      value
+      id: documentId,
+      kind: "document",
+      source: document.source,
+      path: "$"
     });
   }
 
-  for (const [key, nested] of Object.entries(value)) {
-    if (key === "extensions") {
+  if (!Array.isArray(value.nodes)) {
+    return;
+  }
+
+  for (const [index, nodeValue] of value.nodes.entries()) {
+    if (!isJsonObject(nodeValue) || typeof nodeValue["@id"] !== "string") {
       continue;
     }
 
-    collectIdentifiedEntities(nested, source, entities, `${path}.${key}`, false);
+    entities.push({
+      id: nodeValue["@id"],
+      kind: "node",
+      source: document.source,
+      path: `$.nodes[${index}]`
+    });
   }
 }
 
@@ -324,7 +297,7 @@ function usesGraphTerms(value: JsonValue | undefined): boolean {
     return false;
   }
 
-  return Object.keys(value).some((key) => GRAPH_COMPACT_TERMS.has(key));
+  return Object.keys(value).some((key) => GRAPH_COMPACT_TERM_SET.has(key));
 }
 
 function getMajorVersion(version: string): string {

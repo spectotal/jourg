@@ -42,7 +42,19 @@ export function uniqueDiagnostics(diagnostics: readonly GraphDiagnostic[]): Grap
   const seen = new Set<string>();
 
   return diagnostics.filter((diagnostic) => {
-    const key = JSON.stringify(diagnostic);
+    const key = [
+      diagnostic.severity,
+      diagnostic.code,
+      diagnostic.message,
+      diagnostic.source ?? "",
+      diagnostic.path ?? "",
+      diagnostic.entityId ?? "",
+      diagnostic.refId ?? "",
+      diagnostic.importRef ?? "",
+      diagnostic.resolvedImport ?? "",
+      diagnostic.expectedType ?? "",
+      diagnostic.actualType ?? ""
+    ].join("\u001f");
 
     if (seen.has(key)) {
       return false;

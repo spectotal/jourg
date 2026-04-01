@@ -139,6 +139,9 @@ function renderGeneratedModule(artifacts) {
   const aggregateContext = JSON.parse(byId.aggregateContext.raw);
   const coreContext = JSON.parse(byId.coreContext.raw);
   const graphContext = JSON.parse(byId.graphContext.raw);
+  const graphCompactTerms = Object.keys(graphContext["@context"] ?? {})
+    .filter((key) => !key.startsWith("@") && key !== "ujggraph")
+    .sort();
   const manifest = createManifest(artifacts);
 
   return `export type SpecArtifactId =
@@ -173,6 +176,8 @@ export const GRAPH_CONTEXT_URLS = ${JSON.stringify(
     null,
     2
   )} as const;
+
+export const GRAPH_COMPACT_TERMS = ${JSON.stringify(graphCompactTerms, null, 2)} as const;
 
 export const SPEC_SYNC_MANIFEST: SpecSyncManifest = ${JSON.stringify(manifest, null, 2)};
 

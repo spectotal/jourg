@@ -18,12 +18,8 @@ The compiler pipeline is:
 import { compileGraphIR } from "@jourg/graph";
 
 const graph = await compileGraphIR({
-  kind: "memory",
-  entry: "https://example.com/main.jsonld",
-  documents: [
-    { source: "https://example.com/main.jsonld", document: mainDocument },
-    { source: "https://example.com/checkout.jsonld", document: checkoutDocument }
-  ]
+  kind: "locator",
+  entry: "https://example.com/main.jsonld"
 });
 ```
 
@@ -37,4 +33,3 @@ const graph = await compileGraphIR({
 The compiler accepts:
 
 - locator input: `{ kind: "locator", entry }`
-- memory input: `{ kind: "memory", entry, documents }`

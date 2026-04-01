@@ -1,4 +1,3 @@
-import { uniqueDiagnostics } from "./common.js";
 import type {
   GraphDiagnostic,
   GraphNodeType
@@ -72,7 +71,7 @@ export function validateGraphBundle(bundle: ExtractedGraphBundle): ExtractedGrap
 
   return {
     ...bundle,
-    diagnostics: uniqueDiagnostics(diagnostics)
+    diagnostics
   };
 }
 

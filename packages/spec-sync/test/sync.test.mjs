@@ -7,6 +7,7 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 
 import {
+  GRAPH_COMPACT_TERMS,
   GRAPH_CONTEXT_URLS,
   SPEC_SYNC_ARTIFACTS,
   SPEC_SYNC_MANIFEST
@@ -14,12 +15,12 @@ import {
 
 const PACKAGE_ROOT = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const EXPECTED_FILES = [
-  "artifacts/ed/ns/core",
+  "artifacts/ed/ns/core.ttl",
   "artifacts/ed/ns/core.context.jsonld",
-  "artifacts/ed/ns/core.shape",
-  "artifacts/ed/ns/graph",
+  "artifacts/ed/ns/core.shape.ttl",
+  "artifacts/ed/ns/graph.ttl",
   "artifacts/ed/ns/graph.context.jsonld",
-  "artifacts/ed/ns/graph.shape",
+  "artifacts/ed/ns/graph.shape.ttl",
   "artifacts/ed/ns/context.jsonld"
 ];
 
@@ -38,6 +39,8 @@ test("spec-sync exports the expected UJG artifact set", async () => {
     GRAPH_CONTEXT_URLS.graph,
     "https://ujg.specs.openuji.org/ed/ns/graph.context.jsonld"
   );
+  assert.ok(GRAPH_COMPACT_TERMS.includes("Journey"));
+  assert.ok(GRAPH_COMPACT_TERMS.includes("outgoingTransitionRefs"));
   assert.ok(Array.isArray(SPEC_SYNC_ARTIFACTS.aggregateContext.content["@context"]));
 
   for (const relativePath of EXPECTED_FILES) {

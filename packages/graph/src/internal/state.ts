@@ -5,7 +5,6 @@ import type {
   GraphIREntities,
   GraphIRJourney,
   GraphIRLoader,
-  JsonObject,
   UJGDocument
 } from "../types.js";
 
@@ -17,7 +16,6 @@ export interface PreparedSourceInput {
 export interface ResolvedDocument {
   source: string;
   loader: string;
-  document: UJGDocument;
   normalizedDocument: UJGDocument;
   imports: GraphIRDocumentImport[];
 }
@@ -27,7 +25,6 @@ export interface IdentifiedEntity {
   kind: "document" | "node";
   source: string;
   path: string;
-  value: JsonObject;
 }
 
 export interface ResolvedBundle {

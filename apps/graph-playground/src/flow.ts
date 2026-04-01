@@ -1,10 +1,11 @@
 import { MarkerType, type Edge, type Node } from "@xyflow/react";
-import type {
-  CompositeStateEntity,
-  GraphIR,
-  GraphIRJourney,
-  StateEntity
-} from "@jourg/graph";
+import type { GraphIR, GraphIRJourney } from "@jourg/graph";
+
+import {
+  buildRenderableNodes,
+  computeDepths,
+  type RenderableNode
+} from "./flow-model";
 
 export type NodeMatchState = "neutral" | "matched" | "dimmed";
 
@@ -138,87 +139,6 @@ export function createFlowGraph(
   return { nodes, edges };
 }
 
-function buildRenderableNodes(
-  graph: GraphIR,
-  journey: GraphIRJourney
-): RenderableNode[] {
-  const entities = new Map(
-    [...graph.entities.states, ...graph.entities.compositeStates].map((entity) => [entity.id, entity])
-  );
-  const memberStateIds = new Set(journey.memberStateIds);
-
-  return journey.nodeIds
-    .map((nodeId) => {
-      const entity = entities.get(nodeId);
-
-      if (!entity) {
-        return null;
-      }
-
-      return {
-        id: entity.id,
-        type: entity.type,
-        label: entity.label,
-        tags: entity.tags,
-        membership: memberStateIds.has(entity.id) ? "member" : "referenced",
-        isStartState: entity.id === journey.startStateId,
-        subjourneyId: entity.type === "CompositeState" ? entity.subjourneyId : undefined,
-        source: entity.source
-      } satisfies RenderableNode;
-    })
-    .filter((value) => value !== null);
-}
-
-function computeDepths(nodes: readonly RenderableNode[], journey: GraphIRJourney): Map<string, number> {
-  const adjacency = new Map<string, string[]>();
-  const depths = new Map<string, number>();
-  const queue: string[] = [];
-  const startNode = nodes.find((node) => node.isStartState) ?? nodes[0];
-
-  if (startNode) {
-    depths.set(startNode.id, 0);
-    queue.push(startNode.id);
-  }
-
-  for (const edge of journey.edges) {
-    const bucket = adjacency.get(edge.from) ?? [];
-    bucket.push(edge.to);
-    adjacency.set(edge.from, bucket);
-  }
-
-  while (queue.length > 0) {
-    const current = queue.shift();
-
-    if (!current) {
-      continue;
-    }
-
-    const currentDepth = depths.get(current) ?? 0;
-
-    for (const target of adjacency.get(current) ?? []) {
-      if (depths.has(target)) {
-        continue;
-      }
-
-      depths.set(target, currentDepth + 1);
-      queue.push(target);
-    }
-  }
-
-  let fallbackDepth = depths.size > 0 ? Math.max(...depths.values()) + 1 : 0;
-
-  for (const node of nodes) {
-    if (depths.has(node.id)) {
-      continue;
-    }
-
-    depths.set(node.id, fallbackDepth);
-    fallbackDepth += 1;
-  }
-
-  return depths;
-}
-
 function getMatchState(
   nodeId: string,
   hasActiveMatches: boolean,
@@ -241,15 +161,4 @@ function matchesNode(node: RenderableNode, query: string): boolean {
   ]
     .filter((value): value is string => typeof value === "string")
     .some((value) => value.toLowerCase().includes(query));
-}
-
-interface RenderableNode {
-  id: string;
-  type: StateEntity["type"] | CompositeStateEntity["type"];
-  label: string;
-  tags: string[];
-  membership: "member" | "referenced";
-  isStartState: boolean;
-  subjourneyId?: string;
-  source: string;
 }

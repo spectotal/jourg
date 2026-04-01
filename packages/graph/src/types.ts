@@ -42,18 +42,7 @@ export interface GraphIRLocatorInput {
   entry: string | URL;
 }
 
-export interface GraphIRMemoryDocument {
-  source: string;
-  document: UJGDocument;
-}
-
-export interface GraphIRMemoryInput {
-  kind: "memory";
-  entry: string;
-  documents: readonly GraphIRMemoryDocument[];
-}
-
-export type GraphCompileInput = GraphIRLocatorInput | GraphIRMemoryInput;
+export type GraphCompileInput = GraphIRLocatorInput;
 
 export interface GraphCompileOptions {
   loaders?: readonly GraphIRLoader[];
@@ -75,7 +64,6 @@ export interface GraphEntityBase {
   type: GraphNodeType;
   source: string;
   path: string;
-  raw: JsonObject;
 }
 
 export interface JourneyEntity extends GraphEntityBase {

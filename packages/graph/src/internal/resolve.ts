@@ -1,4 +1,4 @@
-import { cloneJson, isJsonObject, toDocumentUrl, toErrorMessage, uniqueDiagnostics } from "./common.js";
+import { cloneJson, isJsonObject, toDocumentUrl, toErrorMessage } from "./common.js";
 import { getMaxDepth } from "./source.js";
 import type {
   GraphCompileOptions,
@@ -59,40 +59,9 @@ export function createHttpLoader(fetchImpl: typeof fetch = fetch): GraphIRLoader
   };
 }
 
-export function createMemoryLoader(
-  documents: readonly { source: string; document: UJGDocument }[]
-): GraphIRLoader {
-  const documentMap = new Map<string, UJGDocument>();
-
-  for (const document of documents) {
-    documentMap.set(toDocumentUrl(document.source).href, cloneJson(document.document));
-  }
-
-  return {
-    name: "memory",
-    canLoad(url) {
-      return documentMap.has(url.href);
-    },
-    async load(url) {
-      const document = documentMap.get(url.href);
-
-      if (!document) {
-        throw new Error(`No in-memory document was registered for ${url.href}.`);
-      }
-
-      return {
-        document: cloneJson(document),
-        mediaType: "application/ld+json"
-      };
-    }
-  };
-}
-
 export function normalizeImports(document: UJGDocument, base: URL): UJGDocument {
-  const normalized = cloneJson(document);
-
   if (!Array.isArray(document.imports)) {
-    return normalized;
+    return document;
   }
 
   const imports = document.imports
@@ -105,9 +74,17 @@ export function normalizeImports(document: UJGDocument, base: URL): UJGDocument 
       }
     });
 
-  normalized.imports = Array.from(new Set(imports)).sort();
+  const normalizedImports = Array.from(new Set(imports)).sort();
+  const importsAreStable =
+    document.imports.length === normalizedImports.length &&
+    document.imports.every((value, index) => value === normalizedImports[index]);
 
-  return normalized;
+  return importsAreStable
+    ? document
+    : {
+        ...document,
+        imports: normalizedImports
+      };
 }
 
 export async function resolveBundle(
@@ -115,6 +92,7 @@ export async function resolveBundle(
   options: GraphCompileOptions
 ): Promise<ResolvedBundle> {
   const documents = new Map<string, ResolvedDocument>();
+  const inFlight = new Map<string, Promise<boolean>>();
   const diagnostics: GraphDiagnostic[] = [];
   const maxDepth = getMaxDepth(options);
   const allowCycles = options.allowCycles ?? false;
@@ -135,6 +113,29 @@ export async function resolveBundle(
     if (documents.has(source)) {
       return true;
     }
+
+    const existing = inFlight.get(source);
+
+    if (existing) {
+      return existing;
+    }
+
+    const visitPromise = visitResolvedDocument(url, depth, ancestry);
+    inFlight.set(source, visitPromise);
+
+    try {
+      return await visitPromise;
+    } finally {
+      inFlight.delete(source);
+    }
+  };
+
+  const visitResolvedDocument = async (
+    url: URL,
+    depth: number,
+    ancestry: string[]
+  ): Promise<boolean> => {
+    const source = url.href;
 
     let loadedSource: LoadedGraphSource;
     let loaderName: string;
@@ -163,12 +164,11 @@ export async function resolveBundle(
       return false;
     }
 
-    const document = loadedSource.document as UJGDocument;
+    const document = cloneJson(loadedSource.document as UJGDocument);
     const normalizedDocument = normalizeImports(document, url);
     const resolvedDocument: ResolvedDocument = {
       source,
       loader: loaderName,
-      document: cloneJson(document),
       normalizedDocument,
       imports: []
     };
@@ -179,67 +179,69 @@ export async function resolveBundle(
       return true;
     }
 
-    for (const request of document.imports) {
-      const edge: GraphIRDocumentImport = {
-        from: source,
-        request: typeof request === "string" ? request : String(request),
-        resolved: null,
-        status: "invalid"
-      };
+    await Promise.all(
+      document.imports.map(async (request) => {
+        const edge: GraphIRDocumentImport = {
+          from: source,
+          request: typeof request === "string" ? request : String(request),
+          resolved: null,
+          status: "invalid"
+        };
 
-      resolvedDocument.imports.push(edge);
+        resolvedDocument.imports.push(edge);
 
-      if (typeof request !== "string") {
-        diagnostics.push({
-          severity: "error",
-          code: "INVALID_IMPORT",
-          message: "imports values must be strings representing IRI references.",
-          source,
-          importRef: edge.request
-        });
-        continue;
-      }
-
-      let targetUrl: URL;
-
-      try {
-        targetUrl = new URL(request, url);
-      } catch (error) {
-        diagnostics.push({
-          severity: "error",
-          code: "INVALID_IMPORT",
-          message: `Invalid import reference ${JSON.stringify(request)}: ${toErrorMessage(error)}`,
-          source,
-          importRef: request
-        });
-        continue;
-      }
-
-      edge.resolved = targetUrl.href;
-
-      if (ancestry.includes(targetUrl.href) || targetUrl.href === source) {
-        edge.status = "cycle";
-        diagnostics.push({
-          severity: "error",
-          code: "CYCLE_DETECTED",
-          message: `Import cycle detected: ${[...ancestry, source, targetUrl.href].join(" -> ")}`,
-          source,
-          importRef: request,
-          resolvedImport: targetUrl.href
-        });
-
-        if (!allowCycles) {
-          continue;
+        if (typeof request !== "string") {
+          diagnostics.push({
+            severity: "error",
+            code: "INVALID_IMPORT",
+            message: "imports values must be strings representing IRI references.",
+            source,
+            importRef: edge.request
+          });
+          return;
         }
-      }
 
-      const loaded = await visit(targetUrl, depth + 1, [...ancestry, source]);
-      edge.status = loaded ? "resolved" : edge.status === "cycle" ? "cycle" : "unresolved";
+        let targetUrl: URL;
 
-      if (loaded) {
-        edge.via = documents.get(targetUrl.href)?.loader;
-      }
-    }
+        try {
+          targetUrl = new URL(request, url);
+        } catch (error) {
+          diagnostics.push({
+            severity: "error",
+            code: "INVALID_IMPORT",
+            message: `Invalid import reference ${JSON.stringify(request)}: ${toErrorMessage(error)}`,
+            source,
+            importRef: request
+          });
+          return;
+        }
+
+        edge.resolved = targetUrl.href;
+
+        if (ancestry.includes(targetUrl.href) || targetUrl.href === source) {
+          edge.status = "cycle";
+          diagnostics.push({
+            severity: "error",
+            code: "CYCLE_DETECTED",
+            message: `Import cycle detected: ${[...ancestry, source, targetUrl.href].join(" -> ")}`,
+            source,
+            importRef: request,
+            resolvedImport: targetUrl.href
+          });
+
+          if (!allowCycles) {
+            return;
+          }
+        }
+
+        const loaded = await visit(targetUrl, depth + 1, [...ancestry, source]);
+        edge.status = loaded ? "resolved" : edge.status === "cycle" ? "cycle" : "unresolved";
+
+        if (loaded) {
+          edge.via = documents.get(targetUrl.href)?.loader;
+        }
+      })
+    );
 
     return true;
   };
@@ -249,7 +251,7 @@ export async function resolveBundle(
   return {
     entry: prepared.entryUrl.href,
     documents: Array.from(documents.values()).sort((left, right) => left.source.localeCompare(right.source)),
-    diagnostics: uniqueDiagnostics(diagnostics)
+    diagnostics
   };
 }
 

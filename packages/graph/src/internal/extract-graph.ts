@@ -1,12 +1,10 @@
 import {
-  cloneJson,
   getOptionalString,
   getOptionalStringArray,
   getRequiredString,
   getRequiredStringArray,
   GRAPH_NODE_TYPES,
-  isJsonObject,
-  uniqueDiagnostics
+  isJsonObject
 } from "./common.js";
 import type {
   CompositeStateEntity,
@@ -112,7 +110,7 @@ export function extractGraphBundle(bundle: CoreValidatedBundle): ExtractedGraphB
 
   return {
     ...bundle,
-    diagnostics: uniqueDiagnostics(diagnostics),
+    diagnostics,
     entities,
     nodeMap,
     journeyMap,
@@ -180,7 +178,6 @@ function normalizeGraphNode(
         type,
         source,
         path,
-        raw: cloneJson(node),
         startState,
         stateRefs,
         transitionRefs,
@@ -209,7 +206,6 @@ function normalizeGraphNode(
         type,
         source,
         path,
-        raw: cloneJson(node),
         label,
         tags
       };
@@ -237,7 +233,6 @@ function normalizeGraphNode(
         type,
         source,
         path,
-        raw: cloneJson(node),
         label,
         tags,
         subjourneyId
@@ -265,7 +260,6 @@ function normalizeGraphNode(
         type,
         source,
         path,
-        raw: cloneJson(node),
         from,
         to,
         label
@@ -292,7 +286,6 @@ function normalizeGraphNode(
         type,
         source,
         path,
-        raw: cloneJson(node),
         outgoingTransitionRefs
       };
     }
@@ -317,7 +310,6 @@ function normalizeGraphNode(
         type,
         source,
         path,
-        raw: cloneJson(node),
         to,
         label
       };

@@ -4,8 +4,9 @@ import {
   type GraphDiagnostic,
   type GraphIR,
   type GraphIRJourney,
-  type GraphIRMemoryDocument,
+  type GraphIRLoader,
   type JsonObject,
+  type UJGDocument
 } from "@jourg/graph";
 import {
   Background,
@@ -141,10 +142,15 @@ const EMPTY_FLOW = {
 };
 
 interface Analysis {
-  documents: GraphIRMemoryDocument[];
+  documents: PlaygroundDocument[];
   diagnostics: GraphDiagnostic[];
   graph: GraphIR | null;
   parseError?: string;
+}
+
+interface PlaygroundDocument {
+  source: string;
+  document: UJGDocument;
 }
 
 type JourneyLayoutMemory = Record<string, { x: number; y: number }>;
@@ -167,13 +173,22 @@ function FlowWorkbench() {
   const [nodes, setNodes, onNodesChange] = useNodesState<JourneyFlowNode>([]);
   const [edges, setEdges] = useState<JourneyFlowEdge[]>([]);
   const deferredSourceText = useDeferredValue(sourceText);
+  const [debouncedSourceText, setDebouncedSourceText] = useState(() => sourceText);
   const { fitView } = useReactFlow<JourneyFlowNode, JourneyFlowEdge>();
+
+  useEffect(() => {
+    const handle = window.setTimeout(() => {
+      setDebouncedSourceText(deferredSourceText);
+    }, 250);
+
+    return () => window.clearTimeout(handle);
+  }, [deferredSourceText]);
 
   useEffect(() => {
     let cancelled = false;
 
     async function runAnalysis() {
-      if (deferredSourceText.trim().length === 0) {
+      if (debouncedSourceText.trim().length === 0) {
         if (!cancelled) {
           setAnalysis({
             documents: [],
@@ -185,16 +200,20 @@ function FlowWorkbench() {
       }
 
       try {
-        const parsed = JSON.parse(deferredSourceText) as unknown;
+        const parsed = JSON.parse(debouncedSourceText) as unknown;
         const documents = normalizeDocuments(parsed);
-        const entry = documents[0]?.source ?? "memory://workspace/document-1.jsonld";
+        const entry = documents[0]?.source ?? "playground://workspace/document-1.jsonld";
 
         try {
-          const graph = await compileGraphIR({
-            kind: "memory",
-            entry,
-            documents
-          });
+          const graph = await compileGraphIR(
+            {
+              kind: "locator",
+              entry
+            },
+            {
+              loaders: [createPlaygroundLoader(documents)]
+            }
+          );
 
           if (!cancelled) {
             setAnalysis({
@@ -239,7 +258,7 @@ function FlowWorkbench() {
     return () => {
       cancelled = true;
     };
-  }, [deferredSourceText]);
+  }, [debouncedSourceText]);
 
   const journeys = useMemo(
     () => analysis.graph?.journeys ?? [],
@@ -577,7 +596,7 @@ function MetricCard({
   );
 }
 
-function normalizeDocuments(value: unknown): GraphIRMemoryDocument[] {
+function normalizeDocuments(value: unknown): PlaygroundDocument[] {
   const rawDocuments = Array.isArray(value) ? value : [value];
 
   if (rawDocuments.some((document) => !isJsonObject(document))) {
@@ -586,7 +605,7 @@ function normalizeDocuments(value: unknown): GraphIRMemoryDocument[] {
 
   return rawDocuments.map((document, index) => ({
     source: getDocumentSource(document, index),
-    document
+    document: document as UJGDocument
   }));
 }
 
@@ -597,11 +616,34 @@ function isJsonObject(value: unknown): value is JsonObject {
 function getDocumentSource(document: JsonObject, index: number): string {
   const documentId = typeof document["@id"] === "string" ? document["@id"] : undefined;
 
-  if (documentId && /^(?:https?|file|memory):/i.test(documentId)) {
+  if (documentId && /^(?:https?|file|memory|playground):/i.test(documentId)) {
     return documentId;
   }
 
-  return `memory://workspace/document-${index + 1}.jsonld`;
+  return `playground://workspace/document-${index + 1}.jsonld`;
+}
+
+function createPlaygroundLoader(documents: readonly PlaygroundDocument[]): GraphIRLoader {
+  const documentMap = new Map(documents.map((document) => [new URL(document.source).href, document.document]));
+
+  return {
+    name: "playground",
+    canLoad(url) {
+      return documentMap.has(url.href);
+    },
+    async load(url) {
+      const document = documentMap.get(url.href);
+
+      if (!document) {
+        throw new Error(`No playground document is registered for ${url.href}.`);
+      }
+
+      return {
+        document,
+        mediaType: "application/ld+json"
+      };
+    }
+  };
 }
 
 function applySavedPositions(

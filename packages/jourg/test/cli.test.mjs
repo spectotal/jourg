@@ -52,6 +52,7 @@ test("jourg compile prints Graph IR JSON for valid input", async () => {
     const graph = JSON.parse(result.stdout);
     assert.equal(graph.kind, "GraphIR");
     assert.equal(graph.journeys[0]?.id, "urn:ujg:journey:cli");
+    assert.equal("raw" in graph.entities.states[0], false);
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
