@@ -9,6 +9,8 @@ export function validateGraphBundle(bundle: ExtractedGraphBundle): ExtractedGrap
   const diagnostics = [...bundle.diagnostics];
 
   for (const journey of bundle.entities.journeys) {
+    const memberStateIds = new Set(journey.stateRefs);
+
     expectStateLike(bundle, diagnostics, journey.source, journey.id, "$.startState", journey.startState);
 
     for (const [index, refId] of journey.stateRefs.entries()) {
@@ -17,6 +19,15 @@ export function validateGraphBundle(bundle: ExtractedGraphBundle): ExtractedGrap
 
     for (const [index, refId] of journey.transitionRefs.entries()) {
       expectType(bundle, diagnostics, journey.source, journey.id, `$.transitionRefs[${index}]`, refId, "Transition");
+      expectTransitionStateMembership(
+        bundle,
+        diagnostics,
+        journey.source,
+        journey.id,
+        `$.transitionRefs[${index}]`,
+        refId,
+        memberStateIds
+      );
     }
 
     for (const [index, refId] of journey.outgoingTransitionGroupRefs.entries()) {
@@ -63,6 +74,46 @@ export function validateGraphBundle(bundle: ExtractedGraphBundle): ExtractedGrap
     ...bundle,
     diagnostics: uniqueDiagnostics(diagnostics)
   };
+}
+
+function expectTransitionStateMembership(
+  bundle: ExtractedGraphBundle,
+  diagnostics: GraphDiagnostic[],
+  source: string,
+  entityId: string,
+  path: string,
+  refId: string,
+  memberStateIds: ReadonlySet<string>
+) {
+  const transition = bundle.transitionMap.get(refId);
+
+  if (!transition) {
+    return;
+  }
+
+  if (!memberStateIds.has(transition.from)) {
+    diagnostics.push({
+      severity: "error",
+      code: "GRAPH_JOURNEY_TRANSITION_MEMBERSHIP",
+      message: `Transition ${refId} has from state ${transition.from} that is not listed in stateRefs.`,
+      source,
+      entityId,
+      path,
+      refId
+    });
+  }
+
+  if (!memberStateIds.has(transition.to)) {
+    diagnostics.push({
+      severity: "error",
+      code: "GRAPH_JOURNEY_TRANSITION_MEMBERSHIP",
+      message: `Transition ${refId} has to state ${transition.to} that is not listed in stateRefs.`,
+      source,
+      entityId,
+      path,
+      refId
+    });
+  }
 }
 
 function expectStateLike(

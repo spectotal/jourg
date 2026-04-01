@@ -35,7 +35,7 @@ test("compileGraphIR compiles memory input with imports and injected mixed edges
                 stateRefs: ["urn:ujg:state:home", "urn:ujg:state:checkout-flow"],
                 transitionRefs: [
                   "urn:ujg:transition:home-to-checkout",
-                  "urn:ujg:transition:checkout-to-profile"
+                  "urn:ujg:transition:checkout-to-home"
                 ],
                 outgoingTransitionGroupRefs: ["urn:ujg:otg:global-header"]
               },
@@ -48,10 +48,10 @@ test("compileGraphIR compiles memory input with imports and injected mixed edges
               },
               {
                 "@type": "Transition",
-                "@id": "urn:ujg:transition:checkout-to-profile",
+                "@id": "urn:ujg:transition:checkout-to-home",
                 from: "urn:ujg:state:checkout-flow",
-                to: "urn:ujg:state:profile",
-                label: "Profile"
+                to: "urn:ujg:state:home",
+                label: "Home"
               },
               {
                 "@type": "State",
@@ -144,10 +144,83 @@ test("compileGraphIR compiles memory input with imports and injected mixed edges
     "urn:ujg:state:home",
     "urn:ujg:state:checkout-flow"
   ]);
-  assert.equal(mainJourney.edges.length, 5);
+  assert.equal(mainJourney.edges.length, 4);
   assert.equal(
-    mainJourney.edges.find((edge) => edge.id === "urn:ujg:state:checkout-flow::urn:ujg:state:profile")?.kind,
+    mainJourney.edges.some((edge) => edge.id === "urn:ujg:state:home::urn:ujg:state:home"),
+    false
+  );
+  assert.equal(
+    mainJourney.edges.find((edge) => edge.id === "urn:ujg:state:checkout-flow::urn:ujg:state:home")?.kind,
     "mixed"
+  );
+});
+
+test("compileGraphIR skips injected outgoing transition self-links", async () => {
+  const graph = await compileGraphIR({
+    kind: "memory",
+    entry: "https://memory.example/self-skip.jsonld",
+    documents: [
+      {
+        source: "https://memory.example/self-skip.jsonld",
+        document: {
+          "@context": CONTEXT_URL,
+          "@id": "https://memory.example/self-skip.jsonld",
+          "@type": "UJGDocument",
+          specVersion: "1.0",
+          nodes: [
+            {
+              "@type": "Journey",
+              "@id": "urn:ujg:journey:self-skip",
+              startState: "urn:ujg:state:home",
+              stateRefs: ["urn:ujg:state:home", "urn:ujg:state:profile"],
+              transitionRefs: ["urn:ujg:transition:home-to-profile"],
+              outgoingTransitionGroupRefs: ["urn:ujg:otg:nav"]
+            },
+            {
+              "@type": "Transition",
+              "@id": "urn:ujg:transition:home-to-profile",
+              "from": "urn:ujg:state:home",
+              "to": "urn:ujg:state:profile",
+              "label": "Profile"
+            },
+            {
+              "@type": "State",
+              "@id": "urn:ujg:state:home",
+              label: "Home"
+            },
+            {
+              "@type": "State",
+              "@id": "urn:ujg:state:profile",
+              label: "Profile"
+            },
+            {
+              "@type": "OutgoingTransition",
+              "@id": "urn:ujg:ot:go-home",
+              to: "urn:ujg:state:home",
+              label: "Home"
+            },
+            {
+              "@type": "OutgoingTransitionGroup",
+              "@id": "urn:ujg:otg:nav",
+              outgoingTransitionRefs: ["urn:ujg:ot:go-home"]
+            }
+          ]
+        }
+      }
+    ]
+  });
+
+  const journey = graph.journeys.find((candidate) => candidate.id === "urn:ujg:journey:self-skip");
+
+  assert.ok(journey);
+  assert.equal(journey.edges.length, 2);
+  assert.equal(
+    journey.edges.some((edge) => edge.id === "urn:ujg:state:home::urn:ujg:state:home"),
+    false
+  );
+  assert.equal(
+    journey.edges.find((edge) => edge.id === "urn:ujg:state:profile::urn:ujg:state:home")?.kind,
+    "injected"
   );
 });
 
@@ -320,6 +393,68 @@ test("compileGraphIR rejects invalid Core and Graph inputs", async () => {
       assert.ok(codes.has("DOCUMENT_EXTENSIONS_NOT_ALLOWED"));
       assert.ok(codes.has("GRAPH_REFERENCE_MISSING"));
       assert.ok(codes.has("GRAPH_REFERENCE_TYPE"));
+      return true;
+    }
+  );
+});
+
+test("compileGraphIR rejects transitions that leave a journey's stateRefs", async () => {
+  await assert.rejects(
+    compileGraphIR({
+      kind: "memory",
+      entry: "https://memory.example/invalid-membership.jsonld",
+      documents: [
+        {
+          source: "https://memory.example/invalid-membership.jsonld",
+          document: {
+            "@context": CONTEXT_URL,
+            "@id": "https://memory.example/invalid-membership.jsonld",
+            "@type": "UJGDocument",
+            specVersion: "1.0",
+            nodes: [
+              {
+                "@type": "Journey",
+                "@id": "urn:ujg:journey:main",
+                startState: "urn:ujg:state:home",
+                stateRefs: ["urn:ujg:state:home", "urn:ujg:state:checkout"],
+                transitionRefs: ["urn:ujg:transition:checkout-to-profile"]
+              },
+              {
+                "@type": "Transition",
+                "@id": "urn:ujg:transition:checkout-to-profile",
+                from: "urn:ujg:state:checkout",
+                to: "urn:ujg:state:profile",
+                label: "Profile"
+              },
+              {
+                "@type": "State",
+                "@id": "urn:ujg:state:home",
+                label: "Home"
+              },
+              {
+                "@type": "State",
+                "@id": "urn:ujg:state:checkout",
+                label: "Checkout"
+              },
+              {
+                "@type": "State",
+                "@id": "urn:ujg:state:profile",
+                label: "Profile"
+              }
+            ]
+          }
+        }
+      ]
+    }),
+    (error) => {
+      assert.ok(error instanceof GraphCompileError);
+      assert.ok(
+        error.diagnostics.some(
+          (diagnostic) =>
+            diagnostic.code === "GRAPH_JOURNEY_TRANSITION_MEMBERSHIP" &&
+            diagnostic.refId === "urn:ujg:transition:checkout-to-profile"
+        )
+      );
       return true;
     }
   );

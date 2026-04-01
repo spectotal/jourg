@@ -141,6 +141,7 @@ export interface GraphDiagnostic {
     | "SPEC_VERSION_MISMATCH"
     | "GRAPH_REFERENCE_MISSING"
     | "GRAPH_REFERENCE_TYPE"
+    | "GRAPH_JOURNEY_TRANSITION_MEMBERSHIP"
     | "INVALID_GRAPH_NODE";
   message: string;
   source?: string;

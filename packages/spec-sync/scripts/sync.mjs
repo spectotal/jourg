@@ -10,7 +10,7 @@ const TARGETS = [
   {
     id: "coreVocabulary",
     url: "https://ujg.specs.openuji.org/ed/ns/core",
-    file: "artifacts/ed/ns/core"
+    file: "artifacts/ed/ns/core.ttl"
   },
   {
     id: "coreContext",
@@ -20,12 +20,12 @@ const TARGETS = [
   {
     id: "coreShape",
     url: "https://ujg.specs.openuji.org/ed/ns/core.shape",
-    file: "artifacts/ed/ns/core.shape"
+    file: "artifacts/ed/ns/core.shape.ttl"
   },
   {
     id: "graphVocabulary",
     url: "https://ujg.specs.openuji.org/ed/ns/graph",
-    file: "artifacts/ed/ns/graph"
+    file: "artifacts/ed/ns/graph.ttl"
   },
   {
     id: "graphContext",
@@ -35,7 +35,7 @@ const TARGETS = [
   {
     id: "graphShape",
     url: "https://ujg.specs.openuji.org/ed/ns/graph.shape",
-    file: "artifacts/ed/ns/graph.shape"
+    file: "artifacts/ed/ns/graph.shape.ttl"
   },
   {
     id: "aggregateContext",

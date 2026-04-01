@@ -64,6 +64,10 @@ export function injectJourneys(bundle: ExtractedGraphBundle): InjectedGraphBundl
               continue;
             }
 
+            if(stateId == outgoingTransition.to) {
+              continue;
+            }
+
             includedStateIds.add(outgoingTransition.to);
             mergeEdge(edgeMap, stateId, outgoingTransition.to, outgoingTransition.label, {
               kind: "injected",

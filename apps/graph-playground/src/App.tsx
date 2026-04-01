@@ -41,7 +41,7 @@ const SAMPLE_INPUT = JSON.stringify(
           stateRefs: ["urn:ujg:state:home", "urn:ujg:state:checkout-flow"],
           transitionRefs: [
             "urn:ujg:transition:home-to-checkout",
-            "urn:ujg:transition:checkout-to-profile"
+            "urn:ujg:transition:checkout-to-home"
           ],
           outgoingTransitionGroupRefs: ["urn:ujg:otg:global-header"]
         },
@@ -54,10 +54,10 @@ const SAMPLE_INPUT = JSON.stringify(
         },
         {
           "@type": "Transition",
-          "@id": "urn:ujg:transition:checkout-to-profile",
+          "@id": "urn:ujg:transition:checkout-to-home",
           from: "urn:ujg:state:checkout-flow",
-          to: "urn:ujg:state:profile",
-          label: "Profile"
+          to: "urn:ujg:state:home",
+          label: "Home"
         },
         {
           "@type": "State",

@@ -3,7 +3,7 @@
   "artifacts": [
     {
       "id": "coreVocabulary",
-      "file": "artifacts/ed/ns/core",
+      "file": "artifacts/ed/ns/core.ttl",
       "mediaType": "application/octet-stream",
       "sha256": "2fb6f51d2570f24882de119333a5226fa5c79635c9807eca2d6dc7f88cfc5569",
       "size": 968,
@@ -19,7 +19,7 @@
     },
     {
       "id": "coreShape",
-      "file": "artifacts/ed/ns/core.shape",
+      "file": "artifacts/ed/ns/core.shape.ttl",
       "mediaType": "application/octet-stream",
       "sha256": "30e505e5915cb08e7dbf2e9b5c62b42e312eef2ba7866678837c38366cfcc26c",
       "size": 1012,
@@ -27,7 +27,7 @@
     },
     {
       "id": "graphVocabulary",
-      "file": "artifacts/ed/ns/graph",
+      "file": "artifacts/ed/ns/graph.ttl",
       "mediaType": "application/octet-stream",
       "sha256": "2b1031407873334f16d67dd88ec10df5c32ef348cc51e09170f211ff28ae2fcd",
       "size": 1988,
@@ -43,10 +43,10 @@
     },
     {
       "id": "graphShape",
-      "file": "artifacts/ed/ns/graph.shape",
+      "file": "artifacts/ed/ns/graph.shape.ttl",
       "mediaType": "application/octet-stream",
-      "sha256": "71c4f7b2371c796b36a9af4deffdb4ed2ae92a569798643ab2d8c238824ed4a9",
-      "size": 2952,
+      "sha256": "94a9a9de06b89c4de2ca003b87dece2e05d402251a0535cc577da0ca22ec0ceb",
+      "size": 3801,
       "url": "https://ujg.specs.openuji.org/ed/ns/graph.shape"
     },
     {

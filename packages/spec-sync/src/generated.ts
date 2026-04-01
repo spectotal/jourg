@@ -32,7 +32,7 @@ export const SPEC_SYNC_MANIFEST: SpecSyncManifest = {
   "artifacts": [
     {
       "id": "coreVocabulary",
-      "file": "artifacts/ed/ns/core",
+      "file": "artifacts/ed/ns/core.ttl",
       "mediaType": "application/octet-stream",
       "sha256": "2fb6f51d2570f24882de119333a5226fa5c79635c9807eca2d6dc7f88cfc5569",
       "size": 968,
@@ -48,7 +48,7 @@ export const SPEC_SYNC_MANIFEST: SpecSyncManifest = {
     },
     {
       "id": "coreShape",
-      "file": "artifacts/ed/ns/core.shape",
+      "file": "artifacts/ed/ns/core.shape.ttl",
       "mediaType": "application/octet-stream",
       "sha256": "30e505e5915cb08e7dbf2e9b5c62b42e312eef2ba7866678837c38366cfcc26c",
       "size": 1012,
@@ -56,7 +56,7 @@ export const SPEC_SYNC_MANIFEST: SpecSyncManifest = {
     },
     {
       "id": "graphVocabulary",
-      "file": "artifacts/ed/ns/graph",
+      "file": "artifacts/ed/ns/graph.ttl",
       "mediaType": "application/octet-stream",
       "sha256": "2b1031407873334f16d67dd88ec10df5c32ef348cc51e09170f211ff28ae2fcd",
       "size": 1988,
@@ -72,10 +72,10 @@ export const SPEC_SYNC_MANIFEST: SpecSyncManifest = {
     },
     {
       "id": "graphShape",
-      "file": "artifacts/ed/ns/graph.shape",
+      "file": "artifacts/ed/ns/graph.shape.ttl",
       "mediaType": "application/octet-stream",
-      "sha256": "71c4f7b2371c796b36a9af4deffdb4ed2ae92a569798643ab2d8c238824ed4a9",
-      "size": 2952,
+      "sha256": "94a9a9de06b89c4de2ca003b87dece2e05d402251a0535cc577da0ca22ec0ceb",
+      "size": 3801,
       "url": "https://ujg.specs.openuji.org/ed/ns/graph.shape"
     },
     {
@@ -191,7 +191,7 @@ export const SPEC_SYNC_ARTIFACTS = {
   },
   graphShape: {
     url: "https://ujg.specs.openuji.org/ed/ns/graph.shape",
-    content: "@prefix ujggraph: <https://ujg.specs.openuji.org/ed/ns/graph#> .\n@prefix sh: <http://www.w3.org/ns/shacl#> .\n@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .\n@prefix ujggraphshape: <https://ujg.specs.openuji.org/ed/ns/graph.shape#> .\n\n\nujggraphshape:StateLikeShape a sh:NodeShape ;\n  sh:nodeKind sh:IRI ;\n  sh:or (\n    [ sh:class ujggraph:State ]\n    [ sh:class ujggraph:CompositeState ]\n  ) .\n\nujggraphshape:JourneyShape a sh:NodeShape ;\n  sh:targetClass ujggraph:Journey ;\n  sh:nodeKind sh:IRI ;\n\n  sh:property [\n    sh:path ujggraph:startState ;\n    sh:minCount 1 ;\n    sh:maxCount 1 ;\n    sh:node ujggraphshape:StateLikeShape ;\n  ] ;\n\n  sh:property [\n    sh:path ujggraph:stateRefs ;\n    sh:minCount 1 ;\n    sh:node ujggraphshape:StateLikeShape ;\n  ] ;\n\n  sh:property [\n    sh:path ujggraph:transitionRefs ;\n    sh:minCount 1 ;\n    sh:class ujggraph:Transition ;\n    sh:nodeKind sh:IRI ;\n  ] ;\n\n  sh:property [\n    sh:path ujggraph:outgoingTransitionGroupRefs ;\n    sh:class ujggraph:OutgoingTransitionGroup ;\n    sh:nodeKind sh:IRI ;\n  ] .\n\nujggraphshape:StateShape a sh:NodeShape ;\n  sh:targetClass ujggraph:State ;\n  sh:nodeKind sh:IRI ;\n\n  sh:property [\n    sh:path ujggraph:label ;\n    sh:datatype xsd:string ;\n    sh:minCount 1 ;\n    sh:maxCount 1 ;\n  ] ;\n\n  sh:property [\n    sh:path ujggraph:tags ;\n    sh:datatype xsd:string ;\n  ] .\n\nujggraphshape:CompositeStateShape a sh:NodeShape ;\n  sh:targetClass ujggraph:CompositeState ;\n  sh:nodeKind sh:IRI ;\n\n  sh:property [\n    sh:path ujggraph:label ;\n    sh:datatype xsd:string ;\n    sh:minCount 1 ;\n    sh:maxCount 1 ;\n  ] ;\n\n  sh:property [\n    sh:path ujggraph:tags ;\n    sh:datatype xsd:string ;\n  ] ;\n\n  sh:property [\n    sh:path ujggraph:subjourneyId ;\n    sh:class ujggraph:Journey ;\n    sh:nodeKind sh:IRI ;\n    sh:minCount 1 ;\n    sh:maxCount 1 ;\n  ] .\n\nujggraphshape:TransitionShape a sh:NodeShape ;\n  sh:targetClass ujggraph:Transition ;\n  sh:nodeKind sh:IRI ;\n\n  sh:property [\n    sh:path ujggraph:from ;\n    sh:minCount 1 ;\n    sh:maxCount 1 ;\n    sh:node ujggraphshape:StateLikeShape ;\n  ] ;\n\n  sh:property [\n    sh:path ujggraph:to ;\n    sh:minCount 1 ;\n    sh:maxCount 1 ;\n    sh:node ujggraphshape:StateLikeShape ;\n  ] ;\n\n  sh:property [\n    sh:path ujggraph:label ;\n    sh:datatype xsd:string ;\n    sh:maxCount 1 ;\n  ] .\n\nujggraphshape:OutgoingTransitionShape a sh:NodeShape ;\n  sh:targetClass ujggraph:OutgoingTransition ;\n  sh:nodeKind sh:IRI ;\n\n  sh:property [\n    sh:path ujggraph:to ;\n    sh:minCount 1 ;\n    sh:maxCount 1 ;\n    sh:node ujggraphshape:StateLikeShape ;\n  ] ;\n\n  sh:property [\n    sh:path ujggraph:label ;\n    sh:datatype xsd:string ;\n    sh:maxCount 1 ;\n  ] .\n\nujggraphshape:OutgoingTransitionGroupShape a sh:NodeShape ;\n  sh:targetClass ujggraph:OutgoingTransitionGroup ;\n  sh:nodeKind sh:IRI ;\n\n  sh:property [\n    sh:path ujggraph:outgoingTransitionRefs ;\n    sh:class ujggraph:OutgoingTransition ;\n    sh:nodeKind sh:IRI ;\n    sh:minCount 1 ;\n  ] .\n"
+    content: "@prefix ujggraph: <https://ujg.specs.openuji.org/ed/ns/graph#> .\n@prefix sh: <http://www.w3.org/ns/shacl#> .\n@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .\n@prefix ujggraphshape: <https://ujg.specs.openuji.org/ed/ns/graph.shape#> .\n\n\nujggraphshape:StateLikeShape a sh:NodeShape ;\n  sh:nodeKind sh:IRI ;\n  sh:or (\n    [ sh:class ujggraph:State ]\n    [ sh:class ujggraph:CompositeState ]\n  ) .\n\nujggraphshape:JourneyShape a sh:NodeShape ;\n  sh:targetClass ujggraph:Journey ;\n  sh:nodeKind sh:IRI ;\n\n  sh:property [\n    sh:path ujggraph:startState ;\n    sh:minCount 1 ;\n    sh:maxCount 1 ;\n    sh:node ujggraphshape:StateLikeShape ;\n  ] ;\n\n  sh:property [\n    sh:path ujggraph:stateRefs ;\n    sh:minCount 1 ;\n    sh:node ujggraphshape:StateLikeShape ;\n  ] ;\n\n  sh:property [\n    sh:path ujggraph:transitionRefs ;\n    sh:minCount 1 ;\n    sh:class ujggraph:Transition ;\n    sh:nodeKind sh:IRI ;\n  ] ;\n\n  sh:property [\n    sh:path ujggraph:outgoingTransitionGroupRefs ;\n    sh:class ujggraph:OutgoingTransitionGroup ;\n    sh:nodeKind sh:IRI ;\n  ] ;\n\n  sh:sparql [\n    a sh:SPARQLConstraint ;\n    sh:message \"A transition in transitionRefs has a from state that is not listed in this journey's stateRefs.\" ;\n    sh:select \"\"\"\n      SELECT $this ?transition ?from\n      WHERE {\n        $this ujggraph:transitionRefs ?transition .\n        ?transition ujggraph:from ?from .\n\n        FILTER (NOT EXISTS {\n          $this ujggraph:stateRefs ?from .\n        })\n      }\n    \"\"\" ;\n  ] ;\n\n  sh:sparql [\n    a sh:SPARQLConstraint ;\n    sh:message \"A transition in transitionRefs has a to state that is not listed in this journey's stateRefs.\" ;\n    sh:select \"\"\"\n      SELECT $this ?transition ?to\n      WHERE {\n        $this ujggraph:transitionRefs ?transition .\n        ?transition ujggraph:to ?to .\n\n        FILTER (NOT EXISTS {\n          $this ujggraph:stateRefs ?to .\n        })\n      }\n    \"\"\" ;\n  ] .\n\nujggraphshape:StateShape a sh:NodeShape ;\n  sh:targetClass ujggraph:State ;\n  sh:nodeKind sh:IRI ;\n\n  sh:property [\n    sh:path ujggraph:label ;\n    sh:datatype xsd:string ;\n    sh:minCount 1 ;\n    sh:maxCount 1 ;\n  ] ;\n\n  sh:property [\n    sh:path ujggraph:tags ;\n    sh:datatype xsd:string ;\n  ] .\n\nujggraphshape:CompositeStateShape a sh:NodeShape ;\n  sh:targetClass ujggraph:CompositeState ;\n  sh:nodeKind sh:IRI ;\n\n  sh:property [\n    sh:path ujggraph:label ;\n    sh:datatype xsd:string ;\n    sh:minCount 1 ;\n    sh:maxCount 1 ;\n  ] ;\n\n  sh:property [\n    sh:path ujggraph:tags ;\n    sh:datatype xsd:string ;\n  ] ;\n\n  sh:property [\n    sh:path ujggraph:subjourneyId ;\n    sh:class ujggraph:Journey ;\n    sh:nodeKind sh:IRI ;\n    sh:minCount 1 ;\n    sh:maxCount 1 ;\n  ] .\n\nujggraphshape:TransitionShape a sh:NodeShape ;\n  sh:targetClass ujggraph:Transition ;\n  sh:nodeKind sh:IRI ;\n\n  sh:property [\n    sh:path ujggraph:from ;\n    sh:minCount 1 ;\n    sh:maxCount 1 ;\n    sh:node ujggraphshape:StateLikeShape ;\n  ] ;\n\n  sh:property [\n    sh:path ujggraph:to ;\n    sh:minCount 1 ;\n    sh:maxCount 1 ;\n    sh:node ujggraphshape:StateLikeShape ;\n  ] ;\n\n  sh:property [\n    sh:path ujggraph:label ;\n    sh:datatype xsd:string ;\n    sh:maxCount 1 ;\n  ] .\n\nujggraphshape:OutgoingTransitionShape a sh:NodeShape ;\n  sh:targetClass ujggraph:OutgoingTransition ;\n  sh:nodeKind sh:IRI ;\n\n  sh:property [\n    sh:path ujggraph:to ;\n    sh:minCount 1 ;\n    sh:maxCount 1 ;\n    sh:node ujggraphshape:StateLikeShape ;\n  ] ;\n\n  sh:property [\n    sh:path ujggraph:label ;\n    sh:datatype xsd:string ;\n    sh:maxCount 1 ;\n  ] .\n\nujggraphshape:OutgoingTransitionGroupShape a sh:NodeShape ;\n  sh:targetClass ujggraph:OutgoingTransitionGroup ;\n  sh:nodeKind sh:IRI ;\n\n  sh:property [\n    sh:path ujggraph:outgoingTransitionRefs ;\n    sh:class ujggraph:OutgoingTransition ;\n    sh:nodeKind sh:IRI ;\n    sh:minCount 1 ;\n  ] . \n"
   },
   graphVocabulary: {
     url: "https://ujg.specs.openuji.org/ed/ns/graph",

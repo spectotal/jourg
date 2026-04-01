@@ -13,7 +13,7 @@
 4. `extractGraphBundle()` in `packages/graph/src/internal/extract-graph.ts`
    Walks `document.normalizedDocument.nodes`, recognizes graph node types, and converts JSON objects into typed entities plus lookup maps.
 5. `validateGraphBundle()` in `packages/graph/src/internal/validate-graph.ts`
-   Resolves graph references by `@id` and enforces expected target types.
+   Resolves graph references by `@id`, enforces expected target types, and checks that `transitionRefs` stay within a journey's `stateRefs`.
 6. `injectJourneys()` in `packages/graph/src/internal/inject.ts`
    Expands outgoing transition groups into effective per-journey edges and merges them with explicit transitions.
 7. `emitGraphIR()` in `packages/graph/src/internal/ir.ts`
