@@ -1,0 +1,8 @@
+{
+  "@context": "https://ujg.specs.openuji.org/ed/ns/context.jsonld",
+  "@id": "https://fixtures.example/cycle/b.jsonld",
+  "@type": "UJGDocument",
+  "specVersion": "1.0",
+  "imports": ["./a.jsonld"],
+  "nodes": []
+}

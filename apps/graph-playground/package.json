@@ -1,0 +1,27 @@
+{
+  "name": "ujg-graph-playground",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "typecheck": "tsc --noEmit",
+    "lint": "tsc --noEmit",
+    "preview": "vite preview",
+    "test": "pnpm run build && node --experimental-strip-types --test test/*.test.ts"
+  },
+  "dependencies": {
+    "@jourg/graph": "workspace:*",
+    "@xyflow/react": "^12.10.2",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.1",
+    "typescript": "^5.8.2",
+    "vite": "^8.0.3"
+  }
+}

@@ -1,0 +1,70 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "jourg: compile fixture (tsx dev)",
+      "type": "node",
+      "request": "launch",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["--conditions=development", "--import", "tsx"],
+      "program": "${workspaceFolder}/packages/jourg/src/index.ts",
+      "args": [
+        "compile",
+        "${workspaceFolder}/packages/graph/fixtures/imports/entry.jsonld",
+        "--json"
+      ],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "skipFiles": ["<node_internals>/**"]
+    },
+    {
+      "name": "jourg: compile fixture (imports)",
+      "type": "node",
+      "request": "launch",
+      "program": "${workspaceFolder}/packages/jourg/dist/index.js",
+      "args": [
+        "compile",
+        "${workspaceFolder}/packages/graph/fixtures/imports/entry.jsonld",
+        "--json"
+      ],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "preLaunchTask": "build graph + cli",
+      "outFiles": ["${workspaceFolder}/packages/*/dist/**/*.js"],
+      "sourceMaps": true,
+      "skipFiles": ["<node_internals>/**"]
+    },
+    {
+      "name": "jourg: compile fixture (invalid refs)",
+      "type": "node",
+      "request": "launch",
+      "program": "${workspaceFolder}/packages/jourg/dist/index.js",
+      "args": [
+        "compile",
+        "${workspaceFolder}/packages/graph/fixtures/invalid/entry.jsonld"
+      ],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "preLaunchTask": "build graph + cli",
+      "outFiles": ["${workspaceFolder}/packages/*/dist/**/*.js"],
+      "sourceMaps": true,
+      "skipFiles": ["<node_internals>/**"]
+    },
+    {
+      "name": "jourg: compile fixture (cycle)",
+      "type": "node",
+      "request": "launch",
+      "program": "${workspaceFolder}/packages/jourg/dist/index.js",
+      "args": [
+        "compile",
+        "${workspaceFolder}/packages/graph/fixtures/cycle/a.jsonld"
+      ],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "preLaunchTask": "build graph + cli",
+      "outFiles": ["${workspaceFolder}/packages/*/dist/**/*.js"],
+      "sourceMaps": true,
+      "skipFiles": ["<node_internals>/**"]
+    }
+  ]
+}

@@ -1,0 +1,5 @@
+node_modules
+dist
+.husky
+packages/spec-sync/artifacts
+packages/spec-sync/src/generated.ts

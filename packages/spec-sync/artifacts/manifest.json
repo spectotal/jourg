@@ -1,0 +1,61 @@
+{
+  "version": 1,
+  "artifacts": [
+    {
+      "id": "coreVocabulary",
+      "file": "artifacts/ed/ns/core.ttl",
+      "mediaType": "application/octet-stream",
+      "sha256": "2fb6f51d2570f24882de119333a5226fa5c79635c9807eca2d6dc7f88cfc5569",
+      "size": 968,
+      "url": "https://ujg.specs.openuji.org/ed/ns/core"
+    },
+    {
+      "id": "coreContext",
+      "file": "artifacts/ed/ns/core.context.jsonld",
+      "mediaType": "application/ld+json",
+      "sha256": "a0be08f7ca6d9586bec54323e4bdf19593bd4d4ab7cc61aaf09e641a24d4e16a",
+      "size": 470,
+      "url": "https://ujg.specs.openuji.org/ed/ns/core.context.jsonld"
+    },
+    {
+      "id": "coreShape",
+      "file": "artifacts/ed/ns/core.shape.ttl",
+      "mediaType": "application/octet-stream",
+      "sha256": "30e505e5915cb08e7dbf2e9b5c62b42e312eef2ba7866678837c38366cfcc26c",
+      "size": 1012,
+      "url": "https://ujg.specs.openuji.org/ed/ns/core.shape"
+    },
+    {
+      "id": "graphVocabulary",
+      "file": "artifacts/ed/ns/graph.ttl",
+      "mediaType": "application/octet-stream",
+      "sha256": "2b1031407873334f16d67dd88ec10df5c32ef348cc51e09170f211ff28ae2fcd",
+      "size": 1988,
+      "url": "https://ujg.specs.openuji.org/ed/ns/graph"
+    },
+    {
+      "id": "graphContext",
+      "file": "artifacts/ed/ns/graph.context.jsonld",
+      "mediaType": "application/ld+json",
+      "sha256": "5163b45c38911fa13af535adaddba2a3f726ae069239d771ff3c95e2c38f0ffd",
+      "size": 1319,
+      "url": "https://ujg.specs.openuji.org/ed/ns/graph.context.jsonld"
+    },
+    {
+      "id": "graphShape",
+      "file": "artifacts/ed/ns/graph.shape.ttl",
+      "mediaType": "application/octet-stream",
+      "sha256": "94a9a9de06b89c4de2ca003b87dece2e05d402251a0535cc577da0ca22ec0ceb",
+      "size": 3801,
+      "url": "https://ujg.specs.openuji.org/ed/ns/graph.shape"
+    },
+    {
+      "id": "aggregateContext",
+      "file": "artifacts/ed/ns/context.jsonld",
+      "mediaType": "application/ld+json",
+      "sha256": "b0581a285b04db7dcecd0661f54164de7ccc9501bec07175386d7a936c623e76",
+      "size": 285,
+      "url": "https://ujg.specs.openuji.org/ed/ns/context.jsonld"
+    }
+  ]
+}
